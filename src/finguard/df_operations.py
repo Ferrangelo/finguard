@@ -66,7 +66,7 @@ _PRIMARY_CATEGORY_ORDER = [
 # dataframe for a month that has no data yet.
 _SCHEMA = {
     "expense_name": pl.Utf8,
-    "expense_date": pl.Int64,
+    "expense_date": pl.Date,
     "expense_amount": pl.Float64,
     "currency": pl.Utf8,
     "expense_in_ref_currency": pl.Float64,

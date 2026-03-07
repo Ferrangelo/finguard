@@ -254,11 +254,20 @@ class DetailedExpenses:
         ordered_cols = [category_col] + sorted(month_cols)  # YYYY-MM
         summary = summary.select(ordered_cols)
 
+        # Add totals row (strip any pre-existing Total rows first)
+        sorted_month_cols = sorted(month_cols)
+        summary = summary.filter(pl.col(category_col) != "Total")
+        totals = ["Total"] + [summary[c].sum() for c in sorted_month_cols]
+        summary = pl.concat([
+            summary,
+            pl.DataFrame({col: [val] for col, val in zip(ordered_cols, totals)})
+        ], how="diagonal")
+
         # sort rows by canonical category order (primary only)
         if kind == "primary":
             order_df = pl.DataFrame({
-                category_col: _PRIMARY_CATEGORY_ORDER,
-                "_order": list(range(len(_PRIMARY_CATEGORY_ORDER))),
+                category_col: _PRIMARY_CATEGORY_ORDER + ["Total"],
+                "_order": list(range(len(_PRIMARY_CATEGORY_ORDER) + 1)),
             })
             summary = (
                 summary

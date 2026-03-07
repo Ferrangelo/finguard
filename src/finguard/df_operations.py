@@ -14,6 +14,54 @@ from finguard.paths import (
     year_from_parquet_path,
 )
 
+# Special-case category name mappings (lowercase key → canonical display value).
+_SPECIAL_CASES: dict[str, str] = {
+    "tv": "TV",
+    "otherexpenses": "OtherExpenses",
+    "mrstuff": "MrStuff",
+    "techdonations": "TechDonations",
+    "othergroceries": "OtherGroceries",
+    "condofee": "CondoFee",
+    "takeaway": "TakeAway",
+    "mrclothing": "MrClothing",
+    "mrbooks": "MrBooks",
+    "mrleisure": "MrLeisure",
+    "mrlearning": "MrLearning",
+    "otherleisure": "OtherLeisure",
+    "otherfees": "OtherFees",
+    "unatantum": "Unatantum",
+    "charityenv": "CharityEnv",
+    "charityhum": "CharityHum",
+    "patreon-like": "Patreon-Like",
+}
+
+
+def normalize_category_value(value: str) -> str:
+    """Return the canonical casing for a category string."""
+    lower = value.lower()
+    if lower in _SPECIAL_CASES:
+        return _SPECIAL_CASES[lower]
+    return lower[0].upper() + lower[1:] if lower else lower
+
+
+# Canonical display order for primary categories.
+_PRIMARY_CATEGORY_ORDER = [
+    "Housing",
+    "Health",
+    "Groceries",
+    "Transport",
+    "Lunchbreak",
+    "Out",
+    "Travel",
+    "Baby",
+    "Clothing",
+    "Leisure",
+    "Gifts",
+    "Fees",
+    "OtherExpenses",
+    "Missioni",
+]
+
 # Schema for the detailed-expenses dataframes.  Used when creating an empty
 # dataframe for a month that has no data yet.
 _SCHEMA = {
@@ -122,8 +170,8 @@ class DetailedExpenses:
                 "expense_amount": [expense_amount],
                 "currency": [currency],
                 "expense_in_ref_currency": [expense_in_ref_currency],
-                "primary_category": [primary_category.lower()],
-                "secondary_category": [secondary_category.lower()],
+                "primary_category": [normalize_category_value(primary_category)],
+                "secondary_category": [normalize_category_value(secondary_category)],
             }
         )
         self.expense_df = pl.concat([self.expense_df, new_row], how="diagonal")
@@ -202,9 +250,22 @@ class DetailedExpenses:
         month_cols = [c for c in summary.columns if c != category_col]
         summary = summary.with_columns([pl.col(c).fill_null(0.0) for c in month_cols])
 
-        # --- sort columns: category first, then months chronologically ---
+        # sort columns: category first, then months chronologically
         ordered_cols = [category_col] + sorted(month_cols)  # YYYY-MM
         summary = summary.select(ordered_cols)
+
+        # sort rows by canonical category order (primary only)
+        if kind == "primary":
+            order_df = pl.DataFrame({
+                category_col: _PRIMARY_CATEGORY_ORDER,
+                "_order": list(range(len(_PRIMARY_CATEGORY_ORDER))),
+            })
+            summary = (
+                summary
+                .join(order_df, on=category_col, how="left")
+                .sort("_order", nulls_last=True)
+                .drop("_order")
+            )
 
         summary.write_parquet(str(summary_path))
         return summary

@@ -7,7 +7,10 @@ authors = [
     { name = "Angelo Ferrari", email = "angeloferrari@pm.me" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "matplotlib>=3.10.8",
+    "polars>=1.38.1",
+]
 
 [project.scripts]
 finguard = "finguard:main"

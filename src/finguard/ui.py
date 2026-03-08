@@ -18,7 +18,9 @@ from finguard.config import (
 from finguard.df_operations import (
     Cashflow,
     DetailedExpenses,
+    InvestmentHoldings,
     _INCOME_CATEGORIES,
+    _INVESTMENT_CATEGORIES,
     normalize_category_value,
 )
 from finguard.paths import (
@@ -292,6 +294,7 @@ def index():
         ui.tab("Expenses")
         ui.tab("Summary")
         ui.tab("Cashflow")
+        ui.tab("NetWorth")
         ui.tab("Mappings")
 
     with ui.tab_panels(tabs, value="Expenses").classes("w-full"):
@@ -533,6 +536,190 @@ def index():
 
             cashflow_content()
 
+        # ===================== NETWORTH TAB =================================
+        with ui.tab_panel("NetWorth"):
+
+            @ui.refreshable
+            def networth_content():
+                inv = InvestmentHoldings(year=st.year)
+
+                ui.label(f"Investment Holdings \u2014 {st.year}").classes(
+                    "text-lg font-bold mt-2 mb-4"
+                )
+
+                # -- Add asset form ------------------------------------------
+                with ui.card().classes("mb-4"):
+                    ui.label("Add Asset").classes("text-sm font-semibold mb-2")
+                    with ui.row().classes("items-end gap-4"):
+                        inp_asset = ui.input("Asset name").classes("w-48")
+                        inp_cat = ui.select(
+                            options=_INVESTMENT_CATEGORIES,
+                            label="Category",
+                            value=_INVESTMENT_CATEGORIES[0],
+                        ).classes("w-40")
+                        inp_link = ui.input("Link (optional)").classes("w-64")
+
+                        def do_add_asset():
+                            name = inp_asset.value.strip()
+                            if not name:
+                                ui.notify("Asset name is required", type="warning")
+                                return
+                            try:
+                                inv.add_asset(name, inp_cat.value, inp_link.value.strip())
+                                inp_asset.value = ""
+                                inp_link.value = ""
+                                networth_content.refresh()
+                                ui.notify(f"Asset '{name}' added", type="positive")
+                            except ValueError as exc:
+                                ui.notify(str(exc), type="negative")
+
+                        ui.button("Add", icon="add", on_click=do_add_asset)
+
+                # -- Holdings table ------------------------------------------
+                if inv.df.height == 0:
+                    ui.label("No assets yet.").classes("text-gray-500")
+                else:
+                    month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
+
+                    with ui.element("table").classes(
+                        "w-full border-collapse text-sm"
+                    ).style("border-spacing:0"):
+                        # Header
+                        with ui.element("thead"):
+                            with ui.element("tr"):
+                                for label, min_w in [
+                                    ("Asset", "160px"),
+                                    ("Category", "110px"),
+                                ]:
+                                    with ui.element("th").classes(
+                                        "text-left px-2 py-1 border-b border-r"
+                                    ).style(f"min-width:{min_w}"):
+                                        ui.label(label).classes(
+                                            "text-xs font-bold"
+                                        )
+                                for abbr in month_abbrs:
+                                    with ui.element("th").classes(
+                                        "text-right px-2 py-1 border-b border-r"
+                                    ).style("min-width:72px"):
+                                        ui.label(abbr).classes(
+                                            "text-xs font-bold"
+                                        )
+                                ui.element("th").classes(
+                                    "px-2 py-1 border-b"
+                                ).style("min-width:40px")
+
+                        # Body
+                        with ui.element("tbody"):
+                            for row_dict in inv.df.to_dicts():
+                                asset = row_dict["asset_name"]
+                                cat = row_dict["category"]
+                                link = row_dict.get("link", "")
+
+                                with ui.element("tr"):
+                                    # Asset name cell: clickable if link set, edit icon always shown
+                                    with ui.element("td").classes(
+                                        "px-2 py-1 border-r text-xs"
+                                    ):
+                                        with ui.row().classes("items-center gap-1 flex-nowrap"):
+                                            if link:
+                                                ui.link(asset, link, new_tab=True).classes(
+                                                    "text-xs text-blue-400 underline"
+                                                )
+                                            else:
+                                                ui.label(asset).classes("text-xs")
+
+                                            def _make_edit_link(
+                                                _inv=inv, _asset=asset, _link=link
+                                            ):
+                                                def open_dlg():
+                                                    with ui.dialog() as dlg, ui.card().classes("w-96"):
+                                                        ui.label(f"Link for {_asset}").classes(
+                                                            "text-sm font-semibold mb-2"
+                                                        )
+                                                        inp_url = ui.input(
+                                                            "URL", value=_link
+                                                        ).classes("w-full")
+
+                                                        def save_link():
+                                                            _inv.set_link(
+                                                                _asset,
+                                                                inp_url.value.strip(),
+                                                            )
+                                                            dlg.close()
+                                                            networth_content.refresh()
+
+                                                        with ui.row().classes("mt-2"):
+                                                            ui.button("Save", on_click=save_link)
+                                                            ui.button("Cancel", on_click=dlg.close).props("flat")
+                                                    dlg.open()
+                                                return open_dlg
+
+                                            ui.button(
+                                                icon="link",
+                                                on_click=_make_edit_link(),
+                                            ).props("flat dense").classes("text-gray-400 ml-1")
+                                    with ui.element("td").classes(
+                                        "px-2 py-1 border-r text-xs"
+                                    ):
+                                        ui.label(cat)
+
+                                    for m in range(1, 13):
+                                        col = f"{m:02d}"
+                                        qty = row_dict[col]
+
+                                        def _make_qty_handler(
+                                            _inv=inv, _asset=asset, _m=m
+                                        ):
+                                            def handler(e):
+                                                try:
+                                                    v = (
+                                                        float(e.sender.value)
+                                                        if e.sender.value not in (None, "")
+                                                        else 0.0
+                                                    )
+                                                except (ValueError, TypeError):
+                                                    return
+                                                _inv.set_quantity(
+                                                    asset_name=_asset,
+                                                    month=_m,
+                                                    quantity=v,
+                                                )
+
+                                            return handler
+
+                                        with ui.element("td").classes(
+                                            "px-1 py-0 border-r text-right"
+                                        ):
+                                            inp = ui.input(
+                                                value=str(qty) if qty != 0.0 else "",
+                                            ).classes("w-20").props(
+                                                'type="number" step="any" dense borderless'
+                                                ' input-class="text-right text-xs"'
+                                            )
+                                            inp.on("blur", _make_qty_handler())
+
+                                    # Delete button
+                                    with ui.element("td").classes(
+                                        "px-1 py-0 text-center"
+                                    ):
+                                        def _make_delete_handler(_inv=inv, _asset=asset):
+                                            def handler():
+                                                _inv.remove_asset(_asset)
+                                                networth_content.refresh()
+                                                ui.notify(
+                                                    f"Asset '{_asset}' removed",
+                                                    type="positive",
+                                                )
+                                            return handler
+
+                                        ui.button(
+                                            icon="delete",
+                                            on_click=_make_delete_handler(),
+                                            color="negative",
+                                        ).props("flat dense")
+
+            networth_content()
+
         # ===================== MAPPINGS TAB =================================
         with ui.tab_panel("Mappings"):
 
@@ -607,6 +794,8 @@ def index():
             summary_content.refresh()
         elif e.value == "Cashflow":
             cashflow_content.refresh()
+        elif e.value == "NetWorth":
+            networth_content.refresh()
 
     tabs.on_value_change(_on_tab_change)
 

@@ -7,6 +7,7 @@ import polars as pl
 from finguard.config import get_mapping
 from finguard.paths import (
     CASHFLOW_FILENAME,
+    INVESTMENTS_FILENAME,
     PRIMARIES_FILENAME,
     SECONDARIES_FILENAME,
     get_monthly_parquet_path,
@@ -489,3 +490,124 @@ class Cashflow:
         self.df = self.df.with_columns(
             pl.when(mask).then(pl.lit(value)).otherwise(pl.col(col)).alias(col)
         )
+
+
+# ======================================================================
+# InvestmentHoldings
+# ======================================================================
+
+_INVESTMENT_CATEGORIES = ["Stocks/ETF", "Commodities", "Bonds"]
+
+# Schema columns (non-month)
+_INV_META_COLS = ["asset_name", "category", "link"]
+
+
+class InvestmentHoldings:
+    """Yearly investment holdings dataframe.
+
+    Layout (wide format)::
+
+        asset_name | category    | 01  | 02  | … | 12
+        VWCE       | Stocks/ETF  | 10  | 10  |   | 12
+        Gold       | Commodities | 2   | 2   |   | 3
+
+    Each monthly cell contains the *quantity* (number of units) owned.
+
+    Parameters
+    ----------
+    year:
+        Calendar year (e.g. 2026).
+    """
+
+    def __init__(self, year: int):
+        self.year = year
+        self._path = get_year_summary_path(year, INVESTMENTS_FILENAME)
+
+        if self._path.exists():
+            self.df = pl.read_parquet(str(self._path))
+            # Back-fill 'link' column for files saved before it was added.
+            if "link" not in self.df.columns:
+                self.df = self.df.with_columns(pl.lit("").alias("link"))
+        else:
+            self.df = pl.DataFrame(
+                schema={
+                    "asset_name": pl.Utf8,
+                    "category": pl.Utf8,
+                    "link": pl.Utf8,
+                    **{f"{m:02d}": pl.Float64 for m in range(1, 13)},
+                }
+            )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def add_asset(self, asset_name: str, category: str, link: str = "") -> None:
+        """Add a new asset row (all monthly quantities initialised to 0).
+
+        Raises ``ValueError`` if the asset already exists or the category
+        is invalid.
+        """
+        if category not in _INVESTMENT_CATEGORIES:
+            raise ValueError(
+                f"'{category}' is not a valid category. "
+                f"Choose from: {_INVESTMENT_CATEGORIES}"
+            )
+        if asset_name in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{asset_name}' already exists.")
+
+        new_row = pl.DataFrame(
+            {
+                "asset_name": [asset_name],
+                "category": [category],
+                "link": [link],
+                **{f"{m:02d}": [0.0] for m in range(1, 13)},
+            }
+        )
+        self.df = pl.concat([self.df, new_row], how="diagonal")
+        self.save()
+
+    def remove_asset(self, asset_name: str) -> None:
+        """Remove an asset row by name."""
+        self.df = self.df.filter(pl.col("asset_name") != asset_name)
+        self.save()
+
+    def set_link(self, asset_name: str, link: str) -> None:
+        """Update the link URL for an asset."""
+        if asset_name not in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{asset_name}' not found.")
+        mask = self.df["asset_name"] == asset_name
+        self.df = self.df.with_columns(
+            pl.when(mask).then(pl.lit(link)).otherwise(pl.col("link")).alias("link")
+        )
+        self.save()
+
+    def set_quantity(
+        self, asset_name: str, month: int, quantity: float
+    ) -> None:
+        """Set the quantity for an asset in a given month.
+
+        Parameters
+        ----------
+        asset_name:
+            Name of the asset.
+        month:
+            Month number (1-12).
+        quantity:
+            Number of units owned.
+        """
+        if not 1 <= month <= 12:
+            raise ValueError(f"month must be between 1 and 12, got {month}")
+        if asset_name not in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{asset_name}' not found.")
+
+        col = f"{month:02d}"
+        mask = self.df["asset_name"] == asset_name
+        self.df = self.df.with_columns(
+            pl.when(mask).then(pl.lit(quantity)).otherwise(pl.col(col)).alias(col)
+        )
+        self.save()
+
+    def save(self) -> None:
+        """Write the holdings dataframe to disk."""
+        self.df.write_parquet(str(self._path))

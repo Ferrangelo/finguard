@@ -125,6 +125,7 @@ def index():
         df = st.de.expense_df.with_row_index("_idx")
         st.de.expense_df = df.filter(pl.col("_idx") != row_id).drop("_idx")
         st.de.expense_df.write_parquet(st.de.expense_df_path)
+        st.de.update_all_summary_tables()
         refresh_table()
         ui.notify("Expense deleted", type="positive")
 
@@ -143,6 +144,7 @@ def index():
             )
         st.de.expense_df = df.drop("_idx")
         st.de.expense_df.write_parquet(st.de.expense_df_path)
+        st.de.update_all_summary_tables()
         refresh_table()
         ui.notify("Expense updated", type="positive")
 
@@ -160,16 +162,22 @@ def index():
             inp_sec = ui.input("Secondary Category", value=row.get("secondary_category", ""))
 
             def do_save():
-                save_edit(row_id, {
-                    "expense_name": inp_name.value,
-                    "expense_date": inp_date.value,
-                    "expense_amount": float(inp_amount.value),
-                    "currency": inp_cur.value,
-                    "expense_in_ref_currency": float(inp_amount.value),
-                    "primary_category": normalize_category_value(inp_pri.value),
-                    "secondary_category": normalize_category_value(inp_sec.value),
-                })
-                dlg.close()
+                if inp_amount.value is None:
+                    ui.notify("Amount is required", type="warning")
+                    return
+                try:
+                    save_edit(row_id, {
+                        "expense_name": inp_name.value,
+                        "expense_date": inp_date.value,
+                        "expense_amount": float(inp_amount.value),
+                        "currency": inp_cur.value,
+                        "expense_in_ref_currency": float(inp_amount.value),
+                        "primary_category": normalize_category_value(inp_pri.value),
+                        "secondary_category": normalize_category_value(inp_sec.value),
+                    })
+                    dlg.close()
+                except Exception as exc:
+                    ui.notify(str(exc), type="negative")
 
             with ui.row().classes("mt-2"):
                 ui.button("Save", on_click=do_save)
@@ -199,6 +207,13 @@ def index():
 
             def do_add():
                 if st.de is None:
+                    ui.notify("No data loaded", type="negative")
+                    return
+                if not inp_name.value:
+                    ui.notify("Expense name is required", type="warning")
+                    return
+                if inp_day.value is None or inp_amount.value is None:
+                    ui.notify("Day and amount are required", type="warning")
                     return
                 try:
                     st.de.add_row(
@@ -212,7 +227,7 @@ def index():
                     refresh_table()
                     dlg.close()
                     ui.notify("Expense added", type="positive")
-                except ValueError as exc:
+                except Exception as exc:
                     ui.notify(str(exc), type="negative")
 
             with ui.row().classes("mt-2"):

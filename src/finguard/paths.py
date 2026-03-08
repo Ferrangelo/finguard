@@ -41,6 +41,7 @@ _PARQUET_SUFFIX = "_detailed_expenses.parquet"
 PRIMARIES_FILENAME = "primaries.parquet"
 SECONDARIES_FILENAME = "secondaries.parquet"
 CASHFLOW_FILENAME = "cashflow.parquet"
+INVESTMENTS_FILENAME = "investments.parquet"
 
 
 def _get_data_home() -> Path:

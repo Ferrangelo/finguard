@@ -6,6 +6,7 @@ import polars as pl
 
 from finguard.config import get_mapping
 from finguard.paths import (
+    CASHFLOW_FILENAME,
     PRIMARIES_FILENAME,
     SECONDARIES_FILENAME,
     get_monthly_parquet_path,
@@ -120,6 +121,11 @@ class DetailedExpenses:
 
         if Path(self.expense_df_path).exists():
             self.expense_df = pl.read_parquet(self.expense_df_path)
+            # Ensure expense_date is Date (older files may store it as Int64).
+            if "expense_date" in self.expense_df.columns and self.expense_df["expense_date"].dtype != pl.Date:
+                self.expense_df = self.expense_df.with_columns(
+                    pl.col("expense_date").cast(pl.Date)
+                )
         else:
             self.expense_df = pl.DataFrame(schema=_SCHEMA)
 
@@ -176,6 +182,7 @@ class DetailedExpenses:
         )
         self.expense_df = pl.concat([self.expense_df, new_row], how="diagonal")
         self.expense_df.write_parquet(self.expense_df_path)
+        self.update_all_summary_tables()
 
     # ------------------------------------------------------------------
     # Aggregation helpers
@@ -331,3 +338,154 @@ class DetailedExpenses:
         # For now everything is in one currency.
         change = 1.0
         return amount * change
+
+
+# ======================================================================
+# Cashflow
+# ======================================================================
+
+# Row labels for the income categories (user-editable values).
+_INCOME_CATEGORIES = [
+    "Salary",
+    "Interests Bank account",
+    "Dividendi e Cedole",
+    "Other",
+]
+
+# Row labels for the derived (computed) categories.
+_DERIVED_CATEGORIES = [
+    "Income",
+    "Spending",
+    "Saving",
+    "Saving %",
+]
+
+_ALL_CASHFLOW_CATEGORIES = _INCOME_CATEGORIES + _DERIVED_CATEGORIES
+
+# Month column labels used in the wide cashflow table.
+_MONTH_LABELS = [f"{m:02d}" for m in range(1, 13)]
+
+
+class Cashflow:
+    """Yearly cashflow dataframe.
+
+    Layout (wide format)::
+
+        category                | 01    | 02    | … | 12
+        Salary               | …     | …     |   | …
+        Interests Bank account  | …     | …     |   | …
+        Dividendi e Cedole      | …     | …     |   | …
+        Other                   | …     | …     |   | …
+        Income                  | (sum) | (sum) |   | (sum)
+        Spending                | (tot) | (tot) |   | (tot)
+        Saving                  | I-S   | I-S   |   | I-S
+        Saving %                | %     | %     |   | %
+
+    Income rows are set manually via :meth:`set_income`.
+    Derived rows are recomputed by :meth:`recompute`.
+
+    Parameters
+    ----------
+    year:
+        Calendar year (e.g. 2026).
+    """
+
+    def __init__(self, year: int):
+        self.year = year
+        self._path = get_year_summary_path(year, CASHFLOW_FILENAME)
+
+        if self._path.exists():
+            self.df = pl.read_parquet(str(self._path))
+        else:
+            self.df = pl.DataFrame(
+                {"category": _ALL_CASHFLOW_CATEGORIES}
+                | {m: [0.0] * len(_ALL_CASHFLOW_CATEGORIES) for m in _MONTH_LABELS}
+            )
+
+    # ------------------------------------------------------------------
+    # Internal functions
+    # ------------------------------------------------------------------
+    
+    def set_income(self, month: int, category: str, value: float) -> None:
+        """Set an income-category value for a given month.
+
+        Parameters
+        ----------
+        month:
+            Month number (1-12).
+        category:
+            One of the income categories (e.g. ``"Salary"``).
+        value:
+            The amount.
+        """
+        if category not in _INCOME_CATEGORIES:
+            raise ValueError(
+                f"'{category}' is not a valid income category. "
+                f"Choose from: {_INCOME_CATEGORIES}"
+            )
+        if not 1 <= month <= 12:
+            raise ValueError(f"month must be between 1 and 12, got {month}")
+
+        col = f"{month:02d}"
+        mask = self.df["category"] == category
+        self.df = self.df.with_columns(
+            pl.when(mask).then(pl.lit(value)).otherwise(pl.col(col)).alias(col)
+        )
+        self.recompute()
+
+    def recompute(self) -> None:
+        """Recompute all derived rows from income values and primaries.parquet,
+        then save."""
+        primaries_path = get_year_summary_path(self.year, PRIMARIES_FILENAME)
+        primaries: pl.DataFrame | None = None
+        if primaries_path.exists():
+            primaries = pl.read_parquet(str(primaries_path))
+
+        for month in range(1, 13):
+            col = f"{month:02d}"
+            month_label = f"{self.year}-{month:02d}"
+
+            # Income = sum of income categories
+            income = sum(
+                self._get_value(cat, col) for cat in _INCOME_CATEGORIES
+            )
+            self._set_value("Income", col, income)
+
+            # Spending = "Total" row from primaries.parquet for this month
+            spending = 0.0
+            if primaries is not None and month_label in primaries.columns:
+                total_rows = primaries.filter(
+                    pl.col("primary_category") == "Total"
+                )
+                if total_rows.height > 0:
+                    spending = total_rows[month_label][0]
+            self._set_value("Spending", col, spending)
+
+            saving = income - spending
+            self._set_value("Saving", col, saving)
+
+            # Saving percentage
+            saving_pct = (100.0 * saving / income) if income != 0 else 0.0
+            self._set_value("Saving %", col, saving_pct)
+
+        self.save()
+
+    def save(self) -> None:
+        """Write the cashflow dataframe to disk."""
+        self.df.write_parquet(str(self._path))
+
+    # ------------------------------------------------------------------
+    # Internal functions
+    # ------------------------------------------------------------------
+
+    def _get_value(self, category: str, col: str) -> float:
+        row = self.df.filter(pl.col("category") == category)
+        if row.height == 0:
+            return 0.0
+        return row[col][0]
+
+    def _set_value(self, category: str, col: str, value: float) -> None:
+        mask = self.df["category"] == category
+        self.df = self.df.with_columns(
+            pl.when(mask).then(pl.lit(value)).otherwise(pl.col(col)).alias(col)
+        )

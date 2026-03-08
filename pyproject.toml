@@ -8,12 +8,15 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "jupyter>=1.1.1",
     "matplotlib>=3.10.8",
+    "nicegui>=2.20.0",
     "polars>=1.38.1",
 ]
 
 [project.scripts]
 finguard = "finguard:main"
+finguard-ui = "finguard.ui:main"
 
 [build-system]
 requires = ["uv_build>=0.10.8,<0.11.0"]

@@ -67,6 +67,8 @@ def _df_to_rows(df: pl.DataFrame) -> list[dict]:
         for key, val in row.items():
             if isinstance(val, date):
                 row[key] = val.isoformat()
+            elif isinstance(val, float):
+                row[key] = round(val, 2)
     return rows
 
 
@@ -429,92 +431,105 @@ def index():
                     "text-lg font-bold mt-2 mb-4"
                 )
 
-                # Build columns: category + 12 months
-                month_cols = [
-                    {
-                        "name": "category",
-                        "label": "",
-                        "field": "category",
-                        "align": "left",
-                    }
-                ] + [
-                    {
-                        "name": f"{m:02d}",
-                        "label": calendar.month_abbr[m],
-                        "field": f"{m:02d}",
-                        "align": "right",
-                    }
-                    for m in range(1, 13)
-                ]
+                month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
+                derived = {"Income", "Spending", "Saving", "Saving %"}
 
-                # Build rows from the cashflow dataframe
-                rows = []
-                for cat in _INCOME_CATEGORIES + ["Income", "Spending", "Saving", "Saving %"]:
-                    row: dict = {"category": cat}
-                    for m in range(1, 13):
-                        col = f"{m:02d}"
-                        val = cf._get_value(cat, col)
-                        if cat == "Saving %":
-                            row[col] = f"{val:.1f}%"
-                        else:
-                            row[col] = f"{val:.2f}"
-                    rows.append(row)
+                with ui.element("table").classes(
+                    "w-full border-collapse text-sm"
+                ).style("border-spacing: 0"):
+                    # Header
+                    with ui.element("thead"):
+                        with ui.element("tr"):
+                            ui.element("th").classes(
+                                "text-left px-2 py-1 border-b border-r"
+                            ).style("min-width:160px")
+                            for abbr in month_abbrs:
+                                with ui.element("th").classes(
+                                    "text-right px-2 py-1 border-b border-r"
+                                ).style("min-width:80px"):
+                                    ui.label(abbr).classes("text-xs font-bold")
 
-                cf_table = ui.table(
-                    columns=month_cols,
-                    rows=rows,
-                    row_key="category",
-                ).classes("w-full")
+                    # Body
+                    with ui.element("tbody"):
+                        all_cats = list(_INCOME_CATEGORIES) + list(
+                            ["Income", "Spending", "Saving", "Saving %"]
+                        )
+                        for cat in all_cats:
+                            is_derived = cat in derived
+                            # Separator line before Income row
+                            border_top = " border-t-2" if cat == "Income" else ""
 
-                # Style rows:  income categories are editable cells,
-                # derived rows get special formatting via slot.
-                cf_table.add_slot(
-                    "body",
-                    r"""
-                    <q-tr v-for="row in props.rows" :key="row.category">
-                        <q-td key="category" :props="props"
-                              :class="['Income','Spending','Saving','Saving %'].includes(row.category)
-                                       ? 'text-weight-bold' : ''">
-                            {{ row.category }}
-                        </q-td>
-                        <q-td v-for="m in ['01','02','03','04','05','06','07','08','09','10','11','12']"
-                              :key="m" :props="props" class="text-right">
-                            <template v-if="!['Income','Spending','Saving','Saving %'].includes(row.category)">
-                                <q-input v-model="row[m]" dense borderless
-                                         input-class="text-right text-xs"
-                                         style="max-width:80px"
-                                         @change="() => $parent.$emit('cell-edit',
-                                             {category: row.category, month: m, value: row[m]})" />
-                            </template>
-                            <template v-else>
-                                <span :class="row.category === 'Spending'
-                                              ? 'text-red-400'
-                                              : (row.category === 'Saving' || row.category === 'Saving %')
-                                                ? (parseFloat(row[m]) > 0 ? 'text-green-400'
-                                                   : parseFloat(row[m]) < 0 ? 'text-red-400' : '')
-                                                : ''"
-                                      class="text-xs">
-                                    {{ row[m] }}
-                                </span>
-                            </template>
-                        </q-td>
-                    </q-tr>
-                    """,
-                )
+                            with ui.element("tr").classes(border_top):
+                                # Category label
+                                weight = "font-bold" if is_derived else ""
+                                with ui.element("td").classes(
+                                    f"px-2 py-1 border-r {weight}"
+                                ):
+                                    ui.label(cat).classes("text-xs")
 
-                def on_cell_edit(e):
-                    args = e.args
-                    cat = args["category"]
-                    month_str = args["month"]
-                    raw = args["value"]
-                    try:
-                        val = float(raw) if raw else 0.0
-                    except (ValueError, TypeError):
-                        return
-                    cf.set_income(month=int(month_str), category=cat, value=val)
-                    cashflow_content.refresh()
+                                # Month cells
+                                for m in range(1, 13):
+                                    col = f"{m:02d}"
+                                    val = cf._get_value(cat, col)
 
-                cf_table.on("cell-edit", on_cell_edit)
+                                    with ui.element("td").classes(
+                                        "px-1 py-0 border-r text-right"
+                                    ):
+                                        if is_derived:
+                                            # Read-only derived value
+                                            if cat == "Saving %":
+                                                txt = f"{val:.1f}%"
+                                            else:
+                                                txt = f"{val:.2f}"
+
+                                            if cat == "Spending":
+                                                color = "text-red-400"
+                                            elif cat in ("Saving", "Saving %"):
+                                                color = (
+                                                    "text-green-400"
+                                                    if val > 0
+                                                    else "text-red-400"
+                                                    if val < 0
+                                                    else ""
+                                                )
+                                            else:
+                                                color = ""
+
+                                            ui.label(txt).classes(
+                                                f"text-xs font-bold {color}"
+                                            )
+                                        else:
+                                            # Editable income input
+                                            def _make_handler(
+                                                _cf=cf, _m=m, _cat=cat
+                                            ):
+                                                def handler(e):
+                                                    try:
+                                                        v = (
+                                                            float(e.value)
+                                                            if e.value
+                                                            else 0.0
+                                                        )
+                                                    except (ValueError, TypeError):
+                                                        return
+                                                    _cf.set_income(
+                                                        month=_m,
+                                                        category=_cat,
+                                                        value=v,
+                                                    )
+                                                    cashflow_content.refresh()
+
+                                                return handler
+
+                                            ui.number(
+                                                value=val if val != 0.0 else None,
+                                                on_change=_make_handler(),
+                                                format="%.2f",
+                                            ).classes("w-20").props(
+                                                "dense borderless hide-bottom-space"
+                                                ' input-class="text-right text-xs"'
+                                                " :hide-spin-buttons=true"
+                                            )
 
             cashflow_content()
 

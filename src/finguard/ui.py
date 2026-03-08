@@ -16,7 +16,9 @@ from finguard.config import (
     remove_mapping as config_remove_mapping,
 )
 from finguard.df_operations import (
+    Cashflow,
     DetailedExpenses,
+    _INCOME_CATEGORIES,
     normalize_category_value,
 )
 from finguard.paths import (
@@ -65,6 +67,8 @@ def _df_to_rows(df: pl.DataFrame) -> list[dict]:
         for key, val in row.items():
             if isinstance(val, date):
                 row[key] = val.isoformat()
+            elif isinstance(val, float):
+                row[key] = round(val, 2)
     return rows
 
 
@@ -144,7 +148,6 @@ def index():
             )
         st.de.expense_df = df.drop("_idx")
         st.de.expense_df.write_parquet(st.de.expense_df_path)
-        st.de.update_all_summary_tables()
         refresh_table()
         ui.notify("Expense updated", type="positive")
 
@@ -288,6 +291,7 @@ def index():
     with ui.tabs().classes("w-full") as tabs:
         ui.tab("Expenses")
         ui.tab("Summary")
+        ui.tab("Cashflow")
         ui.tab("Mappings")
 
     with ui.tab_panels(tabs, value="Expenses").classes("w-full"):
@@ -416,6 +420,119 @@ def index():
                 "Regenerate Summaries", icon="refresh", on_click=update_summaries
             ).classes("mt-4")
 
+        # ===================== CASHFLOW TAB =================================
+        with ui.tab_panel("Cashflow"):
+
+            @ui.refreshable
+            def cashflow_content():
+                cf = Cashflow(year=st.year)
+
+                ui.label(f"Cashflow \u2014 {st.year}").classes(
+                    "text-lg font-bold mt-2 mb-4"
+                )
+
+                month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
+                derived = {"Income", "Spending", "Saving", "Saving %"}
+
+                with ui.element("table").classes(
+                    "w-full border-collapse text-sm"
+                ).style("border-spacing: 0"):
+                    # Header
+                    with ui.element("thead"):
+                        with ui.element("tr"):
+                            ui.element("th").classes(
+                                "text-left px-2 py-1 border-b border-r"
+                            ).style("min-width:160px")
+                            for abbr in month_abbrs:
+                                with ui.element("th").classes(
+                                    "text-right px-2 py-1 border-b border-r"
+                                ).style("min-width:80px"):
+                                    ui.label(abbr).classes("text-xs font-bold")
+
+                    # Body
+                    with ui.element("tbody"):
+                        all_cats = list(_INCOME_CATEGORIES) + list(
+                            ["Income", "Spending", "Saving", "Saving %"]
+                        )
+                        for cat in all_cats:
+                            is_derived = cat in derived
+                            # Separator line before Income row
+                            border_top = " border-t-2" if cat == "Income" else ""
+
+                            with ui.element("tr").classes(border_top):
+                                # Category label
+                                weight = "font-bold" if is_derived else ""
+                                with ui.element("td").classes(
+                                    f"px-2 py-1 border-r {weight}"
+                                ):
+                                    ui.label(cat).classes("text-xs")
+
+                                # Month cells
+                                for m in range(1, 13):
+                                    col = f"{m:02d}"
+                                    val = cf._get_value(cat, col)
+
+                                    with ui.element("td").classes(
+                                        "px-1 py-0 border-r text-right"
+                                    ):
+                                        if is_derived:
+                                            # Read-only derived value
+                                            if cat == "Saving %":
+                                                txt = f"{val:.1f}%"
+                                            else:
+                                                txt = f"{val:.2f}"
+
+                                            if cat == "Spending":
+                                                color = "text-red-400"
+                                            elif cat in ("Saving", "Saving %"):
+                                                color = (
+                                                    "text-green-400"
+                                                    if val > 0
+                                                    else "text-red-400"
+                                                    if val < 0
+                                                    else ""
+                                                )
+                                            else:
+                                                color = ""
+
+                                            ui.label(txt).classes(
+                                                f"text-xs font-bold {color}"
+                                            )
+                                        else:
+                                            # Editable income input
+                                            def _make_handler(
+                                                _cf=cf, _m=m, _cat=cat
+                                            ):
+                                                def handler(e):
+                                                    try:
+                                                        v = (
+                                                            float(e.value)
+                                                            if e.value
+                                                            else 0.0
+                                                        )
+                                                    except (ValueError, TypeError):
+                                                        return
+                                                    _cf.set_income(
+                                                        month=_m,
+                                                        category=_cat,
+                                                        value=v,
+                                                    )
+                                                    cashflow_content.refresh()
+
+                                                return handler
+
+                                            ui.number(
+                                                value=val if val != 0.0 else None,
+                                                on_change=_make_handler(),
+                                                format="%.2f",
+                                            ).classes("w-20").props(
+                                                "dense borderless hide-bottom-space"
+                                                ' input-class="text-right text-xs"'
+                                                " :hide-spin-buttons=true"
+                                            )
+
+            cashflow_content()
+
         # ===================== MAPPINGS TAB =================================
         with ui.tab_panel("Mappings"):
 
@@ -484,10 +601,14 @@ def index():
 
             mappings_content()
 
-    # -- refresh summary when switching to that tab --------------------------
-    tabs.on_value_change(
-        lambda e: summary_content.refresh() if e.value == "Summary" else None
-    )
+    # -- refresh when switching tabs ----------------------------------------
+    def _on_tab_change(e):
+        if e.value == "Summary":
+            summary_content.refresh()
+        elif e.value == "Cashflow":
+            cashflow_content.refresh()
+
+    tabs.on_value_change(_on_tab_change)
 
     # -- initial data load ---------------------------------------------------
     load_data()

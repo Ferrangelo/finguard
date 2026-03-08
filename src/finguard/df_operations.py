@@ -403,9 +403,9 @@ class Cashflow:
             )
 
     # ------------------------------------------------------------------
-    # Public API
+    # Internal functions
     # ------------------------------------------------------------------
-
+    
     def set_income(self, month: int, category: str, value: float) -> None:
         """Set an income-category value for a given month.
 
@@ -475,7 +475,7 @@ class Cashflow:
         self.df.write_parquet(str(self._path))
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Internal functions
     # ------------------------------------------------------------------
 
     def _get_value(self, category: str, col: str) -> float:

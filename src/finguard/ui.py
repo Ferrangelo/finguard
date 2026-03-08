@@ -16,7 +16,9 @@ from finguard.config import (
     remove_mapping as config_remove_mapping,
 )
 from finguard.df_operations import (
+    Cashflow,
     DetailedExpenses,
+    _INCOME_CATEGORIES,
     normalize_category_value,
 )
 from finguard.paths import (
@@ -144,7 +146,6 @@ def index():
             )
         st.de.expense_df = df.drop("_idx")
         st.de.expense_df.write_parquet(st.de.expense_df_path)
-        st.de.update_all_summary_tables()
         refresh_table()
         ui.notify("Expense updated", type="positive")
 
@@ -288,6 +289,7 @@ def index():
     with ui.tabs().classes("w-full") as tabs:
         ui.tab("Expenses")
         ui.tab("Summary")
+        ui.tab("Cashflow")
         ui.tab("Mappings")
 
     with ui.tab_panels(tabs, value="Expenses").classes("w-full"):
@@ -416,6 +418,106 @@ def index():
                 "Regenerate Summaries", icon="refresh", on_click=update_summaries
             ).classes("mt-4")
 
+        # ===================== CASHFLOW TAB =================================
+        with ui.tab_panel("Cashflow"):
+
+            @ui.refreshable
+            def cashflow_content():
+                cf = Cashflow(year=st.year)
+
+                ui.label(f"Cashflow \u2014 {st.year}").classes(
+                    "text-lg font-bold mt-2 mb-4"
+                )
+
+                # Build columns: category + 12 months
+                month_cols = [
+                    {
+                        "name": "category",
+                        "label": "",
+                        "field": "category",
+                        "align": "left",
+                    }
+                ] + [
+                    {
+                        "name": f"{m:02d}",
+                        "label": calendar.month_abbr[m],
+                        "field": f"{m:02d}",
+                        "align": "right",
+                    }
+                    for m in range(1, 13)
+                ]
+
+                # Build rows from the cashflow dataframe
+                rows = []
+                for cat in _INCOME_CATEGORIES + ["Income", "Spending", "Saving", "Saving %"]:
+                    row: dict = {"category": cat}
+                    for m in range(1, 13):
+                        col = f"{m:02d}"
+                        val = cf._get_value(cat, col)
+                        if cat == "Saving %":
+                            row[col] = f"{val:.1f}%"
+                        else:
+                            row[col] = f"{val:.2f}"
+                    rows.append(row)
+
+                cf_table = ui.table(
+                    columns=month_cols,
+                    rows=rows,
+                    row_key="category",
+                ).classes("w-full")
+
+                # Style rows:  income categories are editable cells,
+                # derived rows get special formatting via slot.
+                cf_table.add_slot(
+                    "body",
+                    r"""
+                    <q-tr v-for="row in props.rows" :key="row.category">
+                        <q-td key="category" :props="props"
+                              :class="['Income','Spending','Saving','Saving %'].includes(row.category)
+                                       ? 'text-weight-bold' : ''">
+                            {{ row.category }}
+                        </q-td>
+                        <q-td v-for="m in ['01','02','03','04','05','06','07','08','09','10','11','12']"
+                              :key="m" :props="props" class="text-right">
+                            <template v-if="!['Income','Spending','Saving','Saving %'].includes(row.category)">
+                                <q-input v-model="row[m]" dense borderless
+                                         input-class="text-right text-xs"
+                                         style="max-width:80px"
+                                         @change="() => $parent.$emit('cell-edit',
+                                             {category: row.category, month: m, value: row[m]})" />
+                            </template>
+                            <template v-else>
+                                <span :class="row.category === 'Spending'
+                                              ? 'text-red-400'
+                                              : (row.category === 'Saving' || row.category === 'Saving %')
+                                                ? (parseFloat(row[m]) > 0 ? 'text-green-400'
+                                                   : parseFloat(row[m]) < 0 ? 'text-red-400' : '')
+                                                : ''"
+                                      class="text-xs">
+                                    {{ row[m] }}
+                                </span>
+                            </template>
+                        </q-td>
+                    </q-tr>
+                    """,
+                )
+
+                def on_cell_edit(e):
+                    args = e.args
+                    cat = args["category"]
+                    month_str = args["month"]
+                    raw = args["value"]
+                    try:
+                        val = float(raw) if raw else 0.0
+                    except (ValueError, TypeError):
+                        return
+                    cf.set_income(month=int(month_str), category=cat, value=val)
+                    cashflow_content.refresh()
+
+                cf_table.on("cell-edit", on_cell_edit)
+
+            cashflow_content()
+
         # ===================== MAPPINGS TAB =================================
         with ui.tab_panel("Mappings"):
 
@@ -484,10 +586,14 @@ def index():
 
             mappings_content()
 
-    # -- refresh summary when switching to that tab --------------------------
-    tabs.on_value_change(
-        lambda e: summary_content.refresh() if e.value == "Summary" else None
-    )
+    # -- refresh when switching tabs ----------------------------------------
+    def _on_tab_change(e):
+        if e.value == "Summary":
+            summary_content.refresh()
+        elif e.value == "Cashflow":
+            cashflow_content.refresh()
+
+    tabs.on_value_change(_on_tab_change)
 
     # -- initial data load ---------------------------------------------------
     load_data()

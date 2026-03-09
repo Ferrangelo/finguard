@@ -11,16 +11,23 @@ from nicegui import ui
 
 from finguard.config import (
     add_mapping as config_add_mapping,
+)
+from finguard.config import (
     get_all_mappings,
     get_mapping,
+)
+from finguard.config import (
     remove_mapping as config_remove_mapping,
 )
 from finguard.df_operations import (
-    Cashflow,
-    DetailedExpenses,
-    InvestmentHoldings,
     _INCOME_CATEGORIES,
     _INVESTMENT_CATEGORIES,
+    _LIQUIDITY_CATEGORIES,
+    Cashflow,
+    CreditsDebts,
+    DetailedExpenses,
+    InvestmentHoldings,
+    Liquidity,
     normalize_category_value,
 )
 from finguard.paths import (
@@ -202,9 +209,7 @@ def _build_investment_table(
                                                     _refresh()
 
                                             with ui.row().classes("mt-2"):
-                                                ui.button(
-                                                    "Save", on_click=save_link
-                                                )
+                                                ui.button("Save", on_click=save_link)
                                                 ui.button(
                                                     "Cancel", on_click=dlg.close
                                                 ).props("flat")
@@ -226,13 +231,13 @@ def _build_investment_table(
                         col = f"{m:02d}"
                         val = row_dict[col]
 
-                        with ui.element("td").classes(
-                            "px-1 py-0 border-r text-right"
-                        ):
+                        with ui.element("td").classes("px-1 py-0 border-r text-right"):
                             if editable:
 
                                 def _make_cell_handler(
-                                    _set_fn=set_fn, _asset=asset, _m=m,
+                                    _set_fn=set_fn,
+                                    _asset=asset,
+                                    _m=m,
                                     _kwarg=value_kwarg,
                                     _on_cell_change=on_cell_change,
                                 ):
@@ -240,8 +245,7 @@ def _build_investment_table(
                                         try:
                                             v = (
                                                 float(e.sender.value)
-                                                if e.sender.value
-                                                not in (None, "")
+                                                if e.sender.value not in (None, "")
                                                 else 0.0
                                             )
                                         except (ValueError, TypeError):
@@ -269,11 +273,7 @@ def _build_investment_table(
                                 inp.on("blur", _make_cell_handler())
                             else:
                                 # Read-only display
-                                txt = (
-                                    f"{val:,.2f}"
-                                    if val and val != 0.0
-                                    else ""
-                                )
+                                txt = f"{val:,.2f}" if val and val != 0.0 else ""
                                 ui.label(txt).classes("text-xs")
 
                     # Delete button
@@ -312,11 +312,151 @@ def _build_investment_table(
                     for m in range(1, 13):
                         col = f"{m:02d}"
                         total = df[col].sum()
-                        with ui.element("td").classes(
-                            "px-1 py-0 border-r text-right"
-                        ):
+                        with ui.element("td").classes("px-1 py-0 border-r text-right"):
                             txt = f"{total:,.2f}" if total else ""
                             ui.label(txt).classes("text-xs font-bold")
+
+
+def _build_simple_value_table(
+    *,
+    df: pl.DataFrame,
+    name_col: str,
+    type_col: str | None,
+    month_abbrs: list[str],
+    set_fn,
+    remove_fn,
+    refresh_fn,
+    on_cell_change=None,
+) -> None:
+    """Render an editable month-columned HTML table for Liquidity / CreditsDebts.
+
+    Columns: name, type/category (optional), currency, 12 month cells, delete button.
+    """
+    with (
+        ui.element("table")
+        .classes("w-full border-collapse text-sm")
+        .style("border-spacing:0")
+    ):
+        # Header
+        with ui.element("thead"):
+            with ui.element("tr"):
+                header_cols = [("Name", "160px")]
+                if type_col is not None:
+                    header_cols.append((type_col.replace("_", " ").title(), "110px"))
+                header_cols.append(("Cur", "50px"))
+                for label, min_w in header_cols:
+                    with (
+                        ui.element("th")
+                        .classes("text-left px-2 py-1 border-b border-r")
+                        .style(f"min-width:{min_w}")
+                    ):
+                        ui.label(label).classes("text-xs font-bold")
+                for abbr in month_abbrs:
+                    with (
+                        ui.element("th")
+                        .classes("text-right px-2 py-1 border-b border-r")
+                        .style("min-width:72px")
+                    ):
+                        ui.label(abbr).classes("text-xs font-bold")
+                ui.element("th").classes("px-2 py-1 border-b").style("min-width:40px")
+
+        # Body
+        with ui.element("tbody"):
+            for row_dict in df.to_dicts():
+                row_name = row_dict[name_col]
+                row_cur = row_dict.get("currency", "E")
+
+                with ui.element("tr"):
+                    with ui.element("td").classes("px-2 py-1 border-r text-xs"):
+                        ui.label(row_name)
+                    if type_col is not None:
+                        with ui.element("td").classes("px-2 py-1 border-r text-xs"):
+                            ui.label(row_dict[type_col])
+                    with ui.element("td").classes(
+                        "px-2 py-1 border-r text-xs text-center"
+                    ):
+                        ui.label(row_cur)
+
+                    # Month cells (editable)
+                    for m in range(1, 13):
+                        col = f"{m:02d}"
+                        val = row_dict[col]
+
+                        with ui.element("td").classes("px-1 py-0 border-r text-right"):
+
+                            def _make_handler(
+                                _set_fn=set_fn,
+                                _name=row_name,
+                                _m=m,
+                                _on_cell_change=on_cell_change,
+                            ):
+                                def handler(e):
+                                    try:
+                                        v = (
+                                            float(e.sender.value)
+                                            if e.sender.value not in (None, "")
+                                            else 0.0
+                                        )
+                                    except (ValueError, TypeError):
+                                        return
+                                    _set_fn(_name, month=_m, value=v)
+                                    if _on_cell_change:
+                                        _on_cell_change()
+
+                                return handler
+
+                            inp = (
+                                ui.input(
+                                    value=str(val) if val != 0.0 else "",
+                                )
+                                .classes("w-20")
+                                .props(
+                                    'type="number" step="any" dense borderless'
+                                    ' input-class="text-right text-xs"'
+                                )
+                            )
+                            inp.on("blur", _make_handler())
+
+                    # Delete button
+                    with ui.element("td").classes("px-1 py-0 text-center"):
+
+                        def _make_delete(
+                            _remove_fn=remove_fn,
+                            _name=row_name,
+                            _refresh=refresh_fn,
+                            _on_cell_change=on_cell_change,
+                        ):
+                            def handler():
+                                _remove_fn(_name)
+                                if _refresh:
+                                    _refresh()
+                                if _on_cell_change:
+                                    _on_cell_change()
+                                ui.notify(f"'{_name}' removed", type="positive")
+
+                            return handler
+
+                        ui.button(
+                            icon="delete",
+                            on_click=_make_delete(),
+                            color="negative",
+                        ).props("flat dense")
+
+            # Totals row
+            with ui.element("tr").classes("border-t-2"):
+                with ui.element("td").classes("px-2 py-1 border-r text-xs font-bold"):
+                    ui.label("Total")
+                if type_col is not None:
+                    with ui.element("td").classes("px-2 py-1 border-r"):
+                        pass
+                with ui.element("td").classes("px-2 py-1 border-r"):
+                    pass
+                for m in range(1, 13):
+                    col = f"{m:02d}"
+                    total = df[col].sum()
+                    with ui.element("td").classes("px-1 py-0 border-r text-right"):
+                        txt = f"{total:,.2f}" if total else ""
+                        ui.label(txt).classes("text-xs font-bold")
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +477,10 @@ def index():
         filter_category: str = ""
         filter_amount_min: float | None = None
         filter_amount_max: float | None = None
+
+    # Forward-reference holder for refreshable functions defined later.
+    # This avoids Python 3.14 NameError on free variables in closures.
+    _refreshables: dict = {}
 
     st = State()
 
@@ -522,6 +666,10 @@ def index():
         summary_content.refresh()
         cashflow_content.refresh()
         investment_content.refresh()
+        liquidity_content.refresh()
+        credits_debts_content.refresh()
+        if "total_networth_content" in _refreshables:
+            _refreshables["total_networth_content"].refresh()
 
     def on_month_change(e):
         st.month = e.value
@@ -529,6 +677,10 @@ def index():
         refresh_table()
         summary_content.refresh()
         investment_content.refresh()
+        liquidity_content.refresh()
+        credits_debts_content.refresh()
+        if "total_networth_content" in _refreshables:
+            _refreshables["total_networth_content"].refresh()
 
     # ========================================================================
     # BUILD PAGE
@@ -555,19 +707,19 @@ def index():
 
     # -- tabs ----------------------------------------------------------------
     with ui.tabs().classes("w-full") as tabs:
-        ui.tab("Expenses")
-        # ui.tab("Summary")
-        ui.tab("Cashflow")
-        ui.tab("NetWorth")
-        # ui.tab("Mappings")
+        ui.tab("Expenses").props("no-caps")
+        # ui.tab("Summary").props("no-caps")
+        ui.tab("Cashflow").props("no-caps")
+        ui.tab("NetWorth").props("no-caps")
+        # ui.tab("Mappings").props("no-caps")
 
     with ui.tab_panels(tabs, value="Expenses").classes("w-full"):
         # ===================== EXPENSES TAB =================================
         with ui.tab_panel("Expenses"):
             with ui.tabs().classes("w-full") as exp_subtabs:
-                ui.tab("Detailed expenses")
-                ui.tab("Summary")
-                ui.tab("Mappings expense-categories")
+                ui.tab("Detailed expenses").props("no-caps")
+                ui.tab("Summary").props("no-caps")
+                ui.tab("Mappings expense-categories").props("no-caps")
                 # Future subtabs for different views/filters could go here
 
             with ui.tab_panels(exp_subtabs, value="Detailed expenses").classes(
@@ -931,24 +1083,233 @@ def index():
         with ui.tab_panel("NetWorth"):
             # Sub-tabs for NetWorth
             with ui.tabs().classes("w-full") as networth_tabs:
-                ui.tab("Investments")
-                ui.tab("Liquidity")
-                ui.tab("Total NetWorth")
+                ui.tab("Investments").props("no-caps")
+                ui.tab("Liquidity").props("no-caps")
+                ui.tab("Credits/Debts").props("no-caps")
+                ui.tab("Total NetWorth").props("no-caps")
 
             with ui.tab_panels(networth_tabs, value="Investments").classes("w-full"):
                 with ui.tab_panel("Liquidity"):
-                    # Your liquidity content here
+
+                    @ui.refreshable
                     def liquidity_content():
-                        ui.label("Liquidity details go here.")
+                        liq = Liquidity(year=st.year)
+                        month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
+
+                        # -- Add asset form --
+                        with ui.card().classes("mb-4"):
+                            ui.label("Add Liquidity Asset").classes(
+                                "text-sm font-semibold mb-2"
+                            )
+                            with ui.row().classes("items-end gap-4"):
+                                inp_name = ui.input("Asset name").classes("w-48")
+                                inp_cat = ui.select(
+                                    options=_LIQUIDITY_CATEGORIES,
+                                    label="Category",
+                                    value=_LIQUIDITY_CATEGORIES[0],
+                                ).classes("w-40")
+                                inp_cur = ui.input("Currency", value="E").classes(
+                                    "w-24"
+                                )
+
+                                def do_add_liq():
+                                    name = inp_name.value.strip()
+                                    if not name:
+                                        ui.notify(
+                                            "Asset name is required", type="warning"
+                                        )
+                                        return
+                                    try:
+                                        liq.add_asset(
+                                            name,
+                                            inp_cat.value,
+                                            inp_cur.value.strip() or "E",
+                                        )
+                                        inp_name.value = ""
+                                        liquidity_content.refresh()
+                                        _refreshables[
+                                            "total_networth_content"
+                                        ].refresh()
+                                        ui.notify(
+                                            f"Asset '{name}' added", type="positive"
+                                        )
+                                    except ValueError as exc:
+                                        ui.notify(str(exc), type="negative")
+
+                                ui.button("Add", icon="add", on_click=do_add_liq)
+
+                        if liq.df.height == 0:
+                            ui.label("No liquidity assets yet.").classes(
+                                "text-gray-500"
+                            )
+                        else:
+                            _build_simple_value_table(
+                                df=liq.df,
+                                name_col="asset_name",
+                                type_col="category",
+                                month_abbrs=month_abbrs,
+                                set_fn=liq.set_value,
+                                remove_fn=liq.remove_asset,
+                                refresh_fn=liquidity_content.refresh,
+                                on_cell_change=lambda: _refreshables[
+                                    "total_networth_content"
+                                ].refresh(),
+                            )
 
                     liquidity_content()
 
-                with ui.tab_panel("Total NetWorth"):
-                    # Your total networth content here
-                    def total_networth_content():
-                        ui.label("Total NetWorth details go here.")
+                with ui.tab_panel("Credits/Debts"):
 
-                    total_networth_content()
+                    @ui.refreshable
+                    def credits_debts_content():
+                        cd = CreditsDebts(year=st.year)
+                        month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
+
+                        # -- Add entry form --
+                        with ui.card().classes("mb-4"):
+                            ui.label("Add Credit / Debt").classes(
+                                "text-sm font-semibold mb-2"
+                            )
+                            ui.label(
+                                "Positive values = credit, negative values = debt"
+                            ).classes("text-xs text-gray-500 mb-1")
+                            with ui.row().classes("items-end gap-4"):
+                                inp_name = ui.input("Name").classes("w-48")
+                                inp_cur = ui.input("Currency", value="E").classes(
+                                    "w-24"
+                                )
+
+                                def do_add_cd():
+                                    name = inp_name.value.strip()
+                                    if not name:
+                                        ui.notify("Name is required", type="warning")
+                                        return
+                                    try:
+                                        cd.add_entry(
+                                            name,
+                                            inp_cur.value.strip() or "E",
+                                        )
+                                        inp_name.value = ""
+                                        credits_debts_content.refresh()
+                                        _refreshables[
+                                            "total_networth_content"
+                                        ].refresh()
+                                        ui.notify(
+                                            f"Entry '{name}' added", type="positive"
+                                        )
+                                    except ValueError as exc:
+                                        ui.notify(str(exc), type="negative")
+
+                                ui.button("Add", icon="add", on_click=do_add_cd)
+
+                        if cd.df.height == 0:
+                            ui.label("No credits or debts yet.").classes(
+                                "text-gray-500"
+                            )
+                        else:
+                            _build_simple_value_table(
+                                df=cd.df,
+                                name_col="name",
+                                type_col=None,
+                                month_abbrs=month_abbrs,
+                                set_fn=cd.set_value,
+                                remove_fn=cd.remove_entry,
+                                refresh_fn=credits_debts_content.refresh,
+                                on_cell_change=lambda: _refreshables[
+                                    "total_networth_content"
+                                ].refresh(),
+                            )
+
+                    credits_debts_content()
+
+                with ui.tab_panel("Total NetWorth"):
+
+                    @ui.refreshable
+                    def _total_networth_content():
+                        inv = InvestmentHoldings(year=st.year)
+                        liq = Liquidity(year=st.year)
+                        cd = CreditsDebts(year=st.year)
+                        month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
+                        mcols = [f"{m:02d}" for m in range(1, 13)]
+
+                        # Compute investment totals per month
+                        inv_val = inv.df_value
+                        inv_totals = [
+                            inv_val[c].sum() if inv_val.height else 0.0 for c in mcols
+                        ]
+
+                        # Compute liquidity totals per month
+                        liq_totals = [
+                            liq.df[c].sum() if liq.df.height else 0.0 for c in mcols
+                        ]
+
+                        # Compute credits/debts totals (positive=credit, negative=debt)
+                        cd_totals = [
+                            cd.df[c].sum() if cd.df.height else 0.0 for c in mcols
+                        ]
+
+                        net_totals = [
+                            inv_totals[i] + liq_totals[i] + cd_totals[i]
+                            for i in range(12)
+                        ]
+
+                        ui.label(f"Net Worth \u2014 {st.year}").classes(
+                            "text-lg font-bold mt-2 mb-4"
+                        )
+
+                        rows_data = [
+                            ("Investments", inv_totals),
+                            ("Liquidity", liq_totals),
+                            ("Credits/Debts", cd_totals),
+                            ("Net Worth", net_totals),
+                        ]
+
+                        with (
+                            ui.element("table")
+                            .classes("w-full border-collapse text-sm")
+                            .style("border-spacing:0")
+                        ):
+                            with ui.element("thead"):
+                                with ui.element("tr"):
+                                    with (
+                                        ui.element("th")
+                                        .classes(
+                                            "text-left px-2 py-1 border-b border-r"
+                                        )
+                                        .style("min-width:160px")
+                                    ):
+                                        ui.label("").classes("text-xs font-bold")
+                                    for abbr in month_abbrs:
+                                        with (
+                                            ui.element("th")
+                                            .classes(
+                                                "text-right px-2 py-1 border-b border-r"
+                                            )
+                                            .style("min-width:72px")
+                                        ):
+                                            ui.label(abbr).classes("text-xs font-bold")
+
+                            with ui.element("tbody"):
+                                for label, values in rows_data:
+                                    is_total = label == "Net Worth"
+                                    border_top = " border-t-2" if is_total else ""
+                                    weight = "font-bold" if is_total else ""
+                                    with ui.element("tr").classes(border_top):
+                                        with ui.element("td").classes(
+                                            f"px-2 py-1 border-r text-xs {weight}"
+                                        ):
+                                            ui.label(label)
+                                        for v in values:
+                                            with ui.element("td").classes(
+                                                "px-1 py-0 border-r text-right"
+                                            ):
+                                                txt = f"{v:,.2f}" if v else ""
+                                                ui.label(txt).classes(
+                                                    f"text-xs {weight}"
+                                                )
+
+                    _refreshables["total_networth_content"] = _total_networth_content
+                    _total_networth_content()
 
                 with ui.tab_panel("Investments"):
 
@@ -1013,9 +1374,9 @@ def index():
 
                             # -- Sub-tabs: Holdings / Prices / Value -----------------
                             with ui.tabs().classes("w-full") as inv_subtabs:
-                                ui.tab("Holdings")
-                                ui.tab("Prices")
-                                ui.tab("Value")
+                                ui.tab("Holdings").props("no-caps")
+                                ui.tab("Prices").props("no-caps")
+                                ui.tab("Value").props("no-caps")
 
                             with ui.tab_panels(inv_subtabs, value="Holdings").classes(
                                 "w-full"
@@ -1069,6 +1430,9 @@ def index():
             cashflow_content.refresh()
         elif e.value == "NetWorth":
             investment_content.refresh()
+            liquidity_content.refresh()
+            credits_debts_content.refresh()
+            _refreshables["total_networth_content"].refresh()
 
     tabs.on_value_change(_on_tab_change)
 

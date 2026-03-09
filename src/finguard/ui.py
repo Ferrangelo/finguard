@@ -111,6 +111,214 @@ def _df_to_rows(df: pl.DataFrame) -> list[dict]:
     return rows
 
 
+def _build_investment_table(
+    *,
+    inv: InvestmentHoldings,
+    df: pl.DataFrame,
+    month_abbrs: list[str],
+    editable: bool,
+    set_fn,
+    value_kwarg: str = "quantity",
+    show_delete: bool,
+    refresh_fn,
+    on_cell_change=None,
+) -> None:
+    """Render a month-columned investment HTML table.
+
+    Used for holdings (editable), prices (editable) and value (read-only).
+    """
+    with (
+        ui.element("table")
+        .classes("w-full border-collapse text-sm")
+        .style("border-spacing:0")
+    ):
+        # Header
+        with ui.element("thead"):
+            with ui.element("tr"):
+                for label, min_w in [("Asset", "160px"), ("Category", "110px")]:
+                    with (
+                        ui.element("th")
+                        .classes("text-left px-2 py-1 border-b border-r")
+                        .style(f"min-width:{min_w}")
+                    ):
+                        ui.label(label).classes("text-xs font-bold")
+                for abbr in month_abbrs:
+                    with (
+                        ui.element("th")
+                        .classes("text-right px-2 py-1 border-b border-r")
+                        .style("min-width:72px")
+                    ):
+                        ui.label(abbr).classes("text-xs font-bold")
+                if show_delete:
+                    ui.element("th").classes("px-2 py-1 border-b").style(
+                        "min-width:40px"
+                    )
+
+        # Body
+        with ui.element("tbody"):
+            for row_dict in df.to_dicts():
+                asset = row_dict["asset_name"]
+                cat = row_dict["category"]
+                link = row_dict.get("link", "")
+
+                with ui.element("tr"):
+                    # Asset name cell
+                    with ui.element("td").classes("px-2 py-1 border-r text-xs"):
+                        with ui.row().classes("items-center gap-1 flex-nowrap"):
+                            if link:
+                                ui.link(asset, link, new_tab=True).classes(
+                                    "text-xs text-blue-400 underline"
+                                )
+                            else:
+                                ui.label(asset).classes("text-xs")
+
+                            if editable:
+
+                                def _make_edit_link(
+                                    _inv=inv,
+                                    _asset=asset,
+                                    _link=link,
+                                    _refresh=refresh_fn,
+                                ):
+                                    def open_dlg():
+                                        with (
+                                            ui.dialog() as dlg,
+                                            ui.card().classes("w-96"),
+                                        ):
+                                            ui.label(f"Link for {_asset}").classes(
+                                                "text-sm font-semibold mb-2"
+                                            )
+                                            inp_url = ui.input(
+                                                "URL", value=_link
+                                            ).classes("w-full")
+
+                                            def save_link():
+                                                _inv.set_link(
+                                                    _asset,
+                                                    inp_url.value.strip(),
+                                                )
+                                                dlg.close()
+                                                if _refresh:
+                                                    _refresh()
+
+                                            with ui.row().classes("mt-2"):
+                                                ui.button(
+                                                    "Save", on_click=save_link
+                                                )
+                                                ui.button(
+                                                    "Cancel", on_click=dlg.close
+                                                ).props("flat")
+                                        dlg.open()
+
+                                    return open_dlg
+
+                                ui.button(
+                                    icon="link",
+                                    on_click=_make_edit_link(),
+                                ).props("flat dense").classes("text-gray-400 ml-1")
+
+                    # Category cell
+                    with ui.element("td").classes("px-2 py-1 border-r text-xs"):
+                        ui.label(cat)
+
+                    # Month cells
+                    for m in range(1, 13):
+                        col = f"{m:02d}"
+                        val = row_dict[col]
+
+                        with ui.element("td").classes(
+                            "px-1 py-0 border-r text-right"
+                        ):
+                            if editable:
+
+                                def _make_cell_handler(
+                                    _set_fn=set_fn, _asset=asset, _m=m,
+                                    _kwarg=value_kwarg,
+                                    _on_cell_change=on_cell_change,
+                                ):
+                                    def handler(e):
+                                        try:
+                                            v = (
+                                                float(e.sender.value)
+                                                if e.sender.value
+                                                not in (None, "")
+                                                else 0.0
+                                            )
+                                        except (ValueError, TypeError):
+                                            return
+                                        _set_fn(
+                                            asset_name=_asset,
+                                            month=_m,
+                                            **{_kwarg: v},
+                                        )
+                                        if _on_cell_change:
+                                            _on_cell_change()
+
+                                    return handler
+
+                                inp = (
+                                    ui.input(
+                                        value=str(val) if val != 0.0 else "",
+                                    )
+                                    .classes("w-20")
+                                    .props(
+                                        'type="number" step="any" dense borderless'
+                                        ' input-class="text-right text-xs"'
+                                    )
+                                )
+                                inp.on("blur", _make_cell_handler())
+                            else:
+                                # Read-only display
+                                txt = (
+                                    f"{val:,.2f}"
+                                    if val and val != 0.0
+                                    else ""
+                                )
+                                ui.label(txt).classes("text-xs")
+
+                    # Delete button
+                    if show_delete:
+                        with ui.element("td").classes("px-1 py-0 text-center"):
+
+                            def _make_delete_handler(
+                                _inv=inv, _asset=asset, _refresh=refresh_fn
+                            ):
+                                def handler():
+                                    _inv.remove_asset(_asset)
+                                    if _refresh:
+                                        _refresh()
+                                    ui.notify(
+                                        f"Asset '{_asset}' removed",
+                                        type="positive",
+                                    )
+
+                                return handler
+
+                            ui.button(
+                                icon="delete",
+                                on_click=_make_delete_handler(),
+                                color="negative",
+                            ).props("flat dense")
+
+            # Totals row for read-only tables
+            if not editable:
+                with ui.element("tr").classes("border-t-2"):
+                    with ui.element("td").classes(
+                        "px-2 py-1 border-r text-xs font-bold"
+                    ):
+                        ui.label("Total")
+                    with ui.element("td").classes("px-2 py-1 border-r"):
+                        pass
+                    for m in range(1, 13):
+                        col = f"{m:02d}"
+                        total = df[col].sum()
+                        with ui.element("td").classes(
+                            "px-1 py-0 border-r text-right"
+                        ):
+                            txt = f"{total:,.2f}" if total else ""
+                            ui.label(txt).classes("text-xs font-bold")
+
+
 # ---------------------------------------------------------------------------
 # Page
 # ---------------------------------------------------------------------------
@@ -748,10 +956,6 @@ def index():
                     def investment_content():
                         inv = InvestmentHoldings(year=st.year)
 
-                        ui.label(
-                            f'Investment Holdings \u2014 {st.year} (quantity in number of "shares")'
-                        ).classes("text-lg font-bold mt-2 mb-4")
-
                         # -- Add asset form ------------------------------------------
                         with ui.card().classes("mb-4"):
                             ui.label("Add Asset").classes("text-sm font-semibold mb-2")
@@ -786,195 +990,74 @@ def index():
 
                                 ui.button("Add", icon="add", on_click=do_add_asset)
 
-                        # -- Holdings table ------------------------------------------
                         if inv.df.height == 0:
                             ui.label("No assets yet.").classes("text-gray-500")
                         else:
                             month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
 
-                            with (
-                                ui.element("table")
-                                .classes("w-full border-collapse text-sm")
-                                .style("border-spacing:0")
+                            @ui.refreshable
+                            def value_table_content():
+                                ui.label(
+                                    f"Value \u2014 {st.year} (quantity \u00d7 price)"
+                                ).classes("text-lg font-bold mt-2 mb-4")
+
+                                _build_investment_table(
+                                    inv=inv,
+                                    df=inv.df_value,
+                                    month_abbrs=month_abbrs,
+                                    editable=False,
+                                    set_fn=None,
+                                    show_delete=False,
+                                    refresh_fn=None,
+                                )
+
+                            # -- Sub-tabs: Holdings / Prices / Value -----------------
+                            with ui.tabs().classes("w-full") as inv_subtabs:
+                                ui.tab("Holdings")
+                                ui.tab("Prices")
+                                ui.tab("Value")
+
+                            with ui.tab_panels(inv_subtabs, value="Holdings").classes(
+                                "w-full"
                             ):
-                                # Header
-                                with ui.element("thead"):
-                                    with ui.element("tr"):
-                                        for label, min_w in [
-                                            ("Asset", "160px"),
-                                            ("Category", "110px"),
-                                        ]:
-                                            with (
-                                                ui.element("th")
-                                                .classes(
-                                                    "text-left px-2 py-1 border-b border-r"
-                                                )
-                                                .style(f"min-width:{min_w}")
-                                            ):
-                                                ui.label(label).classes(
-                                                    "text-xs font-bold"
-                                                )
-                                        for abbr in month_abbrs:
-                                            with (
-                                                ui.element("th")
-                                                .classes(
-                                                    "text-right px-2 py-1 border-b border-r"
-                                                )
-                                                .style("min-width:72px")
-                                            ):
-                                                ui.label(abbr).classes(
-                                                    "text-xs font-bold"
-                                                )
-                                        ui.element("th").classes(
-                                            "px-2 py-1 border-b"
-                                        ).style("min-width:40px")
+                                # ===== HOLDINGS (Quantity) ==========================
+                                with ui.tab_panel("Holdings"):
+                                    ui.label(
+                                        f'Holdings \u2014 {st.year} (quantity in number of "shares")'
+                                    ).classes("text-lg font-bold mt-2 mb-4")
 
-                                # Body
-                                with ui.element("tbody"):
-                                    for row_dict in inv.df.to_dicts():
-                                        asset = row_dict["asset_name"]
-                                        cat = row_dict["category"]
-                                        link = row_dict.get("link", "")
+                                    _build_investment_table(
+                                        inv=inv,
+                                        df=inv.df,
+                                        month_abbrs=month_abbrs,
+                                        editable=True,
+                                        set_fn=inv.set_quantity,
+                                        show_delete=True,
+                                        refresh_fn=investment_content.refresh,
+                                        on_cell_change=value_table_content.refresh,
+                                    )
 
-                                        with ui.element("tr"):
-                                            # Asset name cell: clickable if link set, edit icon always shown
-                                            with ui.element("td").classes(
-                                                "px-2 py-1 border-r text-xs"
-                                            ):
-                                                with ui.row().classes(
-                                                    "items-center gap-1 flex-nowrap"
-                                                ):
-                                                    if link:
-                                                        ui.link(
-                                                            asset, link, new_tab=True
-                                                        ).classes(
-                                                            "text-xs text-blue-400 underline"
-                                                        )
-                                                    else:
-                                                        ui.label(asset).classes(
-                                                            "text-xs"
-                                                        )
+                                # ===== PRICES =======================================
+                                with ui.tab_panel("Prices"):
+                                    ui.label(
+                                        f"Prices \u2014 {st.year} (price per share)"
+                                    ).classes("text-lg font-bold mt-2 mb-4")
 
-                                                    def _make_edit_link(
-                                                        _inv=inv,
-                                                        _asset=asset,
-                                                        _link=link,
-                                                    ):
-                                                        def open_dlg():
-                                                            with (
-                                                                ui.dialog() as dlg,
-                                                                ui.card().classes(
-                                                                    "w-96"
-                                                                ),
-                                                            ):
-                                                                ui.label(
-                                                                    f"Link for {_asset}"
-                                                                ).classes(
-                                                                    "text-sm font-semibold mb-2"
-                                                                )
-                                                                inp_url = ui.input(
-                                                                    "URL", value=_link
-                                                                ).classes("w-full")
+                                    _build_investment_table(
+                                        inv=inv,
+                                        df=inv.df_prices,
+                                        month_abbrs=month_abbrs,
+                                        editable=True,
+                                        set_fn=inv.set_price,
+                                        value_kwarg="price",
+                                        show_delete=False,
+                                        refresh_fn=investment_content.refresh,
+                                        on_cell_change=value_table_content.refresh,
+                                    )
 
-                                                                def save_link():
-                                                                    _inv.set_link(
-                                                                        _asset,
-                                                                        inp_url.value.strip(),
-                                                                    )
-                                                                    dlg.close()
-                                                                    investment_content.refresh()
-
-                                                                with ui.row().classes(
-                                                                    "mt-2"
-                                                                ):
-                                                                    ui.button(
-                                                                        "Save",
-                                                                        on_click=save_link,
-                                                                    )
-                                                                    ui.button(
-                                                                        "Cancel",
-                                                                        on_click=dlg.close,
-                                                                    ).props("flat")
-                                                            dlg.open()
-
-                                                        return open_dlg
-
-                                                    ui.button(
-                                                        icon="link",
-                                                        on_click=_make_edit_link(),
-                                                    ).props("flat dense").classes(
-                                                        "text-gray-400 ml-1"
-                                                    )
-                                            with ui.element("td").classes(
-                                                "px-2 py-1 border-r text-xs"
-                                            ):
-                                                ui.label(cat)
-
-                                            for m in range(1, 13):
-                                                col = f"{m:02d}"
-                                                qty = row_dict[col]
-
-                                                def _make_qty_handler(
-                                                    _inv=inv, _asset=asset, _m=m
-                                                ):
-                                                    def handler(e):
-                                                        try:
-                                                            v = (
-                                                                float(e.sender.value)
-                                                                if e.sender.value
-                                                                not in (None, "")
-                                                                else 0.0
-                                                            )
-                                                        except (ValueError, TypeError):
-                                                            return
-                                                        _inv.set_quantity(
-                                                            asset_name=_asset,
-                                                            month=_m,
-                                                            quantity=v,
-                                                        )
-
-                                                    return handler
-
-                                                with ui.element("td").classes(
-                                                    "px-1 py-0 border-r text-right"
-                                                ):
-                                                    inp = (
-                                                        ui.input(
-                                                            value=str(qty)
-                                                            if qty != 0.0
-                                                            else "",
-                                                        )
-                                                        .classes("w-20")
-                                                        .props(
-                                                            'type="number" step="any" dense borderless'
-                                                            ' input-class="text-right text-xs"'
-                                                        )
-                                                    )
-                                                    inp.on("blur", _make_qty_handler())
-
-                                            # Delete button
-                                            with ui.element("td").classes(
-                                                "px-1 py-0 text-center"
-                                            ):
-
-                                                def _make_delete_handler(
-                                                    _inv=inv, _asset=asset
-                                                ):
-                                                    def handler():
-                                                        _inv.remove_asset(_asset)
-                                                        investment_content.refresh()
-                                                        ui.notify(
-                                                            f"Asset '{_asset}' removed",
-                                                            type="positive",
-                                                        )
-
-                                                    return handler
-
-                                                ui.button(
-                                                    icon="delete",
-                                                    on_click=_make_delete_handler(),
-                                                    color="negative",
-                                                ).props("flat dense")
+                                # ===== VALUE (Qty × Price) ==========================
+                                with ui.tab_panel("Value"):
+                                    value_table_content()
 
                     investment_content()
 

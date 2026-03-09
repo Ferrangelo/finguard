@@ -580,7 +580,7 @@ class InvestmentHoldings:
             }
         )
         self.df = pl.concat([self.df, new_row], how="diagonal")
-        self.df_prices = pl.concat([self.df, new_row], how="diagonal")
+        self.df_prices = pl.concat([self.df_prices, new_row], how="diagonal")
         self.save()
 
     def remove_asset(self, asset_name: str) -> None:
@@ -641,13 +641,31 @@ class InvestmentHoldings:
             raise ValueError(
                 f"quant_or_price must be 'quantity' or 'price', got '{quant_or_price}'"
             )
+            
+    def set_quantity(self, asset_name: str, month: int, quantity: float) -> None:
+        """Set the quantity for an asset in a given month."""
+        self.set_quantity_or_price(
+            asset_name=asset_name,
+            month=month,
+            quantity=quantity,
+            quant_or_price="quantity",
+            )
+
+    def set_price(self, asset_name: str, month: int, price: float) -> None:
+        """Set the price for an asset in a given month."""
+        self.set_quantity_or_price(
+            asset_name=asset_name,
+            month=month,
+            quantity=price,
+            quant_or_price="price",
+        )
 
     def save_df(self) -> None:
         """Write the holdings dataframe to disk."""
         self.df.write_parquet(str(self._path))
 
     def save_df_prices(self) -> None:
-        """Write the holdings dataframe to disk."""
+        """Write the prices dataframe to disk."""
         self.df_prices.write_parquet(str(self._path_prices))
 
     def save(self) -> None:

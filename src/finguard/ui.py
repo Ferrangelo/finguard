@@ -543,7 +543,7 @@ def index():
             def networth_content():
                 inv = InvestmentHoldings(year=st.year)
 
-                ui.label(f"Investment Holdings \u2014 {st.year}").classes(
+                ui.label(f'Investment Holdings \u2014 {st.year} (quantity in number of "shares")').classes(
                     "text-lg font-bold mt-2 mb-4"
                 )
 

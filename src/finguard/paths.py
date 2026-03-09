@@ -43,6 +43,8 @@ SECONDARIES_FILENAME = "secondaries.parquet"
 CASHFLOW_FILENAME = "cashflow.parquet"
 INVESTMENTS_FILENAME = "investments.parquet"
 INVESTMENTS_PRICES_FILENAME = "investments_prices.parquet"
+LIQUIDITY_FILENAME = "liquidity.parquet"
+CREDITS_DEBTS_FILENAME = "credits_debts.parquet"
 
 
 def _get_data_home() -> Path:

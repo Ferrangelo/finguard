@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import calendar
+import operator
 import re
 from datetime import date
 
@@ -85,6 +87,38 @@ _EXPENSE_COLUMNS = [
     },
     {"name": "actions", "label": "", "field": "actions", "align": "center"},
 ]
+
+
+# ---------------------------------------------------------------------------
+# Safe math expression evaluator
+# ---------------------------------------------------------------------------
+
+_SAFE_OPS: dict[type, object] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos,
+}
+
+
+def _safe_eval_expr(expr: str) -> float:
+    """Safely evaluate a simple arithmetic expression (+-*/ and parentheses)."""
+    tree = ast.parse(expr.strip(), mode="eval")
+
+    def _eval(node: ast.AST) -> float:
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return float(node.value)
+        if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_OPS:
+            return _SAFE_OPS[type(node.op)](_eval(node.left), _eval(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_OPS:
+            return _SAFE_OPS[type(node.op)](_eval(node.operand))
+        raise ValueError(f"Unsupported expression: {ast.dump(node)}")
+
+    return _eval(tree)
 
 
 # ---------------------------------------------------------------------------
@@ -278,12 +312,14 @@ def _build_investment_table(
                                     def handler(e):
                                         try:
                                             v = (
-                                                float(e.sender.value)
+                                                _safe_eval_expr(str(e.sender.value))
                                                 if e.sender.value not in (None, "")
                                                 else 0.0
                                             )
-                                        except (ValueError, TypeError):
+                                        except (ValueError, TypeError, ZeroDivisionError, SyntaxError):
                                             return
+                                        e.sender.value = str(v) if v != 0.0 else ""
+                                        e.sender.update()
                                         _set_fn(
                                             asset_name=_asset,
                                             month=_m,
@@ -300,7 +336,7 @@ def _build_investment_table(
                                     )
                                     .classes("w-20")
                                     .props(
-                                        'type="number" step="any" dense borderless'
+                                        'dense borderless'
                                         ' input-class="text-right text-xs"'
                                     )
                                 )
@@ -510,12 +546,14 @@ def _build_simple_value_table(
                                 def handler(e):
                                     try:
                                         v = (
-                                            float(e.sender.value)
+                                            _safe_eval_expr(str(e.sender.value))
                                             if e.sender.value not in (None, "")
                                             else 0.0
                                         )
-                                    except (ValueError, TypeError):
+                                    except (ValueError, TypeError, ZeroDivisionError, SyntaxError):
                                         return
+                                    e.sender.value = str(v) if v != 0.0 else ""
+                                    e.sender.update()
                                     _set_fn(_name, month=_m, value=v)
                                     if _on_cell_change:
                                         _on_cell_change()
@@ -528,7 +566,7 @@ def _build_simple_value_table(
                                 )
                                 .classes("w-20")
                                 .props(
-                                    'type="number" step="any" dense borderless'
+                                    'dense borderless'
                                     ' input-class="text-right text-xs"'
                                 )
                             )
@@ -668,7 +706,7 @@ def index():
             ui.label("Edit Expense").classes("text-lg font-bold mb-2")
             inp_name = ui.input("Name", value=row.get("expense_name", ""))
             inp_date = ui.input("Date (YYYY-MM-DD)", value=row.get("expense_date", ""))
-            inp_amount = ui.number("Amount", value=row.get("expense_amount", 0))
+            inp_amount = ui.input("Amount", value=str(row.get("expense_amount", 0)))
             inp_cur = ui.input("Currency", value=row.get("currency", "E"))
             inp_pri = ui.input(
                 "Primary Category", value=row.get("primary_category", "")
@@ -678,18 +716,19 @@ def index():
             )
 
             def do_save():
-                if inp_amount.value is None:
+                if not inp_amount.value:
                     ui.notify("Amount is required", type="warning")
                     return
                 try:
+                    amount = _safe_eval_expr(str(inp_amount.value))
                     save_edit(
                         row_id,
                         {
                             "expense_name": inp_name.value,
                             "expense_date": inp_date.value,
-                            "expense_amount": float(inp_amount.value),
+                            "expense_amount": amount,
                             "currency": inp_cur.value,
-                            "expense_in_ref_currency": float(inp_amount.value),
+                            "expense_in_ref_currency": amount,
                             "primary_category": normalize_category_value(inp_pri.value),
                             "secondary_category": normalize_category_value(
                                 inp_sec.value
@@ -710,7 +749,7 @@ def index():
             ui.label("Add Expense").classes("text-lg font-bold mb-2")
             inp_name = ui.input("Expense Name")
             inp_day = ui.number("Day of Month", value=today.day, min=1, max=31)
-            inp_amount = ui.number("Amount", value=0.0)
+            inp_amount = ui.input("Amount", value="")
             inp_cur = ui.input("Currency", value="E")
             inp_pri = ui.input("Primary Category (optional if mapped)")
             inp_sec = ui.input("Secondary Category (optional)")
@@ -737,14 +776,14 @@ def index():
                 if not inp_name.value:
                     ui.notify("Expense name is required", type="warning")
                     return
-                if inp_day.value is None or inp_amount.value is None:
+                if inp_day.value is None or not inp_amount.value:
                     ui.notify("Day and amount are required", type="warning")
                     return
                 try:
                     st.de.add_row(
                         expense_name=inp_name.value,
                         expense_day=int(inp_day.value),
-                        expense_amount=float(inp_amount.value),
+                        expense_amount=_safe_eval_expr(str(inp_amount.value)),
                         currency=inp_cur.value,
                         primary_category=inp_pri.value or None,
                         secondary_category=inp_sec.value or None,
@@ -1169,12 +1208,14 @@ def index():
                                                 def handler(e):
                                                     try:
                                                         v = (
-                                                            float(e.value)
-                                                            if e.value
+                                                            _safe_eval_expr(str(e.sender.value))
+                                                            if e.sender.value not in (None, "")
                                                             else 0.0
                                                         )
-                                                    except (ValueError, TypeError):
+                                                    except (ValueError, TypeError, ZeroDivisionError, SyntaxError):
                                                         return
+                                                    e.sender.value = str(v) if v != 0.0 else ""
+                                                    e.sender.update()
                                                     _cf.set_income(
                                                         month=_m,
                                                         category=_cat,
@@ -1184,15 +1225,13 @@ def index():
 
                                                 return handler
 
-                                            ui.number(
-                                                value=val if val != 0.0 else None,
-                                                on_change=_make_handler(),
-                                                format="%.2f",
+                                            inp = ui.input(
+                                                value=str(val) if val != 0.0 else "",
                                             ).classes("w-20").props(
-                                                "dense borderless hide-bottom-space"
+                                                "dense borderless"
                                                 ' input-class="text-right text-xs"'
-                                                " :hide-spin-buttons=true"
                                             )
+                                            inp.on("blur", _make_handler())
 
             cashflow_content()
 

@@ -491,7 +491,9 @@ def index():
                         if st.de is None:
                             return
                         st.de.update_all_summary_tables()
+                        Cashflow(year=st.year).recompute()
                         summary_content.refresh()
+                        cashflow_content.refresh()
                         ui.notify("Summary tables updated", type="positive")
 
                     ui.button(
@@ -597,12 +599,17 @@ def index():
 
                     mappings_content()
 
+            exp_subtabs.on_value_change(
+                lambda e: summary_content.refresh() if e.value == "Summary" else None
+            )
+
         # ===================== CASHFLOW TAB =================================
         with ui.tab_panel("Cashflow"):
 
             @ui.refreshable
             def cashflow_content():
                 cf = Cashflow(year=st.year)
+                cf.recompute()
 
                 ui.label(f"Cashflow \u2014 {st.year}").classes(
                     "text-lg font-bold mt-2 mb-4"
@@ -973,7 +980,9 @@ def index():
 
     # -- refresh when switching tabs ----------------------------------------
     def _on_tab_change(e):
-        if e.value == "Cashflow":
+        if e.value == "Expenses":
+            summary_content.refresh()
+        elif e.value == "Cashflow":
             cashflow_content.refresh()
         elif e.value == "NetWorth":
             investment_content.refresh()

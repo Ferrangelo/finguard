@@ -660,6 +660,25 @@ class InvestmentHoldings:
             quant_or_price="price",
         )
 
+    @property
+    def df_value(self) -> pl.DataFrame:
+        """Return a dataframe of quantity x price for each asset and month.
+
+        The result has the same shape as ``df`` (asset_name, category, link,
+        01..12) but each monthly cell contains ``quantity * price``.
+        """
+        mcols = [f"{m:02d}" for m in range(1, 13)]
+        prices = self.df_prices.select(
+            "asset_name",
+            *[pl.col(c).alias(f"{c}_price") for c in mcols],
+        )
+        value = self.df.join(prices, on="asset_name", how="left")
+        for c in mcols:
+            value = value.with_columns(
+                (pl.col(c) * pl.col(f"{c}_price")).alias(c)
+            ).drop(f"{c}_price")
+        return value
+
     def save_df(self) -> None:
         """Write the holdings dataframe to disk."""
         self.df.write_parquet(str(self._path))

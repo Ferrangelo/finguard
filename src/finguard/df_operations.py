@@ -591,6 +591,27 @@ class InvestmentHoldings:
         self.df_prices = self.df_prices.filter(pl.col("asset_name") != asset_name)
         self.save()
 
+    def rename_asset(self, old_name: str, new_name: str) -> None:
+        """Rename an asset row."""
+        if old_name not in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{old_name}' not found.")
+        if new_name != old_name and new_name in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{new_name}' already exists.")
+        mask = self.df["asset_name"] == old_name
+        self.df = self.df.with_columns(
+            pl.when(mask)
+            .then(pl.lit(new_name))
+            .otherwise(pl.col("asset_name"))
+            .alias("asset_name")
+        )
+        self.df_prices = self.df_prices.with_columns(
+            pl.when(self.df_prices["asset_name"] == old_name)
+            .then(pl.lit(new_name))
+            .otherwise(pl.col("asset_name"))
+            .alias("asset_name")
+        )
+        self.save()
+
     def set_link(self, asset_name: str, link: str) -> None:
         """Update the link URL for an asset."""
         if asset_name not in self.df["asset_name"].to_list():
@@ -770,6 +791,21 @@ class Liquidity:
         self.df = self.df.filter(pl.col("asset_name") != asset_name)
         self.save()
 
+    def rename_asset(self, old_name: str, new_name: str) -> None:
+        """Rename a liquidity asset row."""
+        if old_name not in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{old_name}' not found.")
+        if new_name != old_name and new_name in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{new_name}' already exists.")
+        mask = self.df["asset_name"] == old_name
+        self.df = self.df.with_columns(
+            pl.when(mask)
+            .then(pl.lit(new_name))
+            .otherwise(pl.col("asset_name"))
+            .alias("asset_name")
+        )
+        self.save()
+
     def set_value(self, asset_name: str, month: int, value: float) -> None:
         """Set the value for an asset in a given month."""
         if not 1 <= month <= 12:
@@ -859,6 +895,21 @@ class CreditsDebts:
     def remove_entry(self, name: str) -> None:
         """Remove a credit/debt row by name."""
         self.df = self.df.filter(pl.col("name") != name)
+        self.save()
+
+    def rename_entry(self, old_name: str, new_name: str) -> None:
+        """Rename a credit/debt row."""
+        if old_name not in self.df["name"].to_list():
+            raise ValueError(f"Entry '{old_name}' not found.")
+        if new_name != old_name and new_name in self.df["name"].to_list():
+            raise ValueError(f"Entry '{new_name}' already exists.")
+        mask = self.df["name"] == old_name
+        self.df = self.df.with_columns(
+            pl.when(mask)
+            .then(pl.lit(new_name))
+            .otherwise(pl.col("name"))
+            .alias("name")
+        )
         self.save()
 
     def set_value(self, name: str, month: int, value: float) -> None:

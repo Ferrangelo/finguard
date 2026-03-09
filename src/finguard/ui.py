@@ -181,7 +181,7 @@ def _build_investment_table(
 
                             if editable:
 
-                                def _make_edit_link(
+                                def _make_edit_asset(
                                     _inv=inv,
                                     _asset=asset,
                                     _link=link,
@@ -192,24 +192,47 @@ def _build_investment_table(
                                             ui.dialog() as dlg,
                                             ui.card().classes("w-96"),
                                         ):
-                                            ui.label(f"Link for {_asset}").classes(
+                                            ui.label(f"Edit {_asset}").classes(
                                                 "text-sm font-semibold mb-2"
                                             )
+                                            inp_name = ui.input(
+                                                "Name", value=_asset
+                                            ).classes("w-full")
                                             inp_url = ui.input(
-                                                "URL", value=_link
+                                                "Link URL", value=_link
                                             ).classes("w-full")
 
-                                            def save_link():
-                                                _inv.set_link(
-                                                    _asset,
-                                                    inp_url.value.strip(),
-                                                )
+                                            def save_changes():
+                                                new_name = inp_name.value.strip()
+                                                new_link = inp_url.value.strip()
+                                                if not new_name:
+                                                    ui.notify(
+                                                        "Name cannot be empty",
+                                                        type="warning",
+                                                    )
+                                                    return
+                                                try:
+                                                    if new_name != _asset:
+                                                        _inv.rename_asset(
+                                                            _asset, new_name
+                                                        )
+                                                    if new_link != _link:
+                                                        _inv.set_link(
+                                                            new_name, new_link
+                                                        )
+                                                except ValueError as exc:
+                                                    ui.notify(
+                                                        str(exc), type="negative"
+                                                    )
+                                                    return
                                                 dlg.close()
                                                 if _refresh:
                                                     _refresh()
 
                                             with ui.row().classes("mt-2"):
-                                                ui.button("Save", on_click=save_link)
+                                                ui.button(
+                                                    "Save", on_click=save_changes
+                                                )
                                                 ui.button(
                                                     "Cancel", on_click=dlg.close
                                                 ).props("flat")
@@ -218,8 +241,8 @@ def _build_investment_table(
                                     return open_dlg
 
                                 ui.button(
-                                    icon="link",
-                                    on_click=_make_edit_link(),
+                                    icon="edit",
+                                    on_click=_make_edit_asset(),
                                 ).props("flat dense").classes("text-gray-400 ml-1")
 
                     # Category cell
@@ -325,6 +348,7 @@ def _build_simple_value_table(
     month_abbrs: list[str],
     set_fn,
     remove_fn,
+    rename_fn=None,
     refresh_fn,
     on_cell_change=None,
 ) -> None:
@@ -368,7 +392,68 @@ def _build_simple_value_table(
 
                 with ui.element("tr"):
                     with ui.element("td").classes("px-2 py-1 border-r text-xs"):
-                        ui.label(row_name)
+                        with ui.row().classes("items-center gap-1 flex-nowrap"):
+                            ui.label(row_name)
+
+                            if rename_fn is not None:
+
+                                def _make_edit_name(
+                                    _rename_fn=rename_fn,
+                                    _name=row_name,
+                                    _refresh=refresh_fn,
+                                    _on_cell_change=on_cell_change,
+                                ):
+                                    def open_dlg():
+                                        with (
+                                            ui.dialog() as dlg,
+                                            ui.card().classes("w-96"),
+                                        ):
+                                            ui.label(f"Rename {_name}").classes(
+                                                "text-sm font-semibold mb-2"
+                                            )
+                                            inp_name = ui.input(
+                                                "Name", value=_name
+                                            ).classes("w-full")
+
+                                            def save_name():
+                                                new_name = inp_name.value.strip()
+                                                if not new_name:
+                                                    ui.notify(
+                                                        "Name cannot be empty",
+                                                        type="warning",
+                                                    )
+                                                    return
+                                                if new_name == _name:
+                                                    dlg.close()
+                                                    return
+                                                try:
+                                                    _rename_fn(_name, new_name)
+                                                except ValueError as exc:
+                                                    ui.notify(
+                                                        str(exc), type="negative"
+                                                    )
+                                                    return
+                                                dlg.close()
+                                                if _refresh:
+                                                    _refresh()
+                                                if _on_cell_change:
+                                                    _on_cell_change()
+
+                                            with ui.row().classes("mt-2"):
+                                                ui.button(
+                                                    "Save", on_click=save_name
+                                                )
+                                                ui.button(
+                                                    "Cancel", on_click=dlg.close
+                                                ).props("flat")
+                                        dlg.open()
+
+                                    return open_dlg
+
+                                ui.button(
+                                    icon="edit",
+                                    on_click=_make_edit_name(),
+                                ).props("flat dense").classes("text-gray-400 ml-1")
                     if type_col is not None:
                         with ui.element("td").classes("px-2 py-1 border-r text-xs"):
                             ui.label(row_dict[type_col])
@@ -1150,6 +1235,7 @@ def index():
                                 month_abbrs=month_abbrs,
                                 set_fn=liq.set_value,
                                 remove_fn=liq.remove_asset,
+                                rename_fn=liq.rename_asset,
                                 refresh_fn=liquidity_content.refresh,
                                 on_cell_change=lambda: _refreshables[
                                     "total_networth_content"
@@ -1214,6 +1300,7 @@ def index():
                                 month_abbrs=month_abbrs,
                                 set_fn=cd.set_value,
                                 remove_fn=cd.remove_entry,
+                                rename_fn=cd.rename_entry,
                                 refresh_fn=credits_debts_content.refresh,
                                 on_cell_change=lambda: _refreshables[
                                     "total_networth_content"

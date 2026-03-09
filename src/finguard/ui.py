@@ -38,6 +38,11 @@ from finguard.paths import (
     get_dbs_root,
     get_year_summary_path,
 )
+from finguard.ui_plots import (
+    render_category_expenses_chart,
+    render_monthly_expenses_chart,
+    render_monthly_expenses_pie,
+)
 
 _MONTH_NAMES: dict[int, str] = {i: calendar.month_name[i] for i in range(1, 13)}
 
@@ -970,9 +975,13 @@ def index():
                                 }
                                 for i, c in enumerate(monthly.columns)
                             ]
-                            ui.table(
-                                columns=cols, rows=_df_to_rows(monthly), row_key="id"
-                            ).classes("w-full")
+                            with ui.row().classes("w-full items-start gap-8"):
+                                with ui.column().classes("flex-1"):
+                                    ui.table(
+                                        columns=cols, rows=_df_to_rows(monthly), row_key="id"
+                                    ).classes("w-full")
+                                with ui.column().classes("flex-1"):
+                                    render_monthly_expenses_pie(st.de, kind)
                         else:
                             ui.label("No data for this month.").classes("text-gray-500")
 
@@ -1013,6 +1022,78 @@ def index():
                             ui.table(
                                 columns=cols, rows=_df_to_rows(cum), row_key="id"
                             ).classes("w-full")
+
+                            # -- bar chart: compare up to 3 months --
+                            ui.label("Monthly Comparison Chart").classes(
+                                "text-lg font-bold mt-6 mb-2"
+                            )
+                            # Determine available months from the parquet columns
+                            available_months = {
+                                int(c.split("-")[1]): _MONTH_NAMES[int(c.split("-")[1])]
+                                for c in cum.columns
+                                if "-" in c and c.split("-")[1].isdigit()
+                            }
+                            # Default: select the current month (if available)
+                            default_sel = (
+                                [st.month] if st.month in available_months else
+                                list(available_months.keys())[:1]
+                            )
+
+                            chart_months_select = ui.select(
+                                options=available_months,
+                                value=default_sel,
+                                label="Months to compare (max 3)",
+                                multiple=True,
+                            ).classes("w-72 mb-2").props('use-chips')
+
+                            chart_container = ui.column().classes("w-full")
+
+                            def _render_chart():
+                                chart_container.clear()
+                                selected = chart_months_select.value or []
+                                sel = sorted(selected)[:3]
+                                with chart_container:
+                                    render_monthly_expenses_chart(
+                                        year=st.year,
+                                        months=sel,
+                                        kind=kind,
+                                    )
+
+                            chart_months_select.on_value_change(lambda _: _render_chart())
+                            _render_chart()
+
+                            # -- line chart: compare categories over months --
+                            ui.label("Compare Expenses").classes(
+                                "text-lg font-bold mt-8 mb-2"
+                            )
+                            all_categories = [
+                                c for c in cum[cat_col].to_list()
+                                if c != "Total"
+                            ]
+                            default_cats = all_categories[:1]
+
+                            cat_line_select = ui.select(
+                                options=all_categories,
+                                value=default_cats,
+                                label="Categories to compare (max 3)",
+                                multiple=True,
+                            ).classes("w-80 mb-2").props("use-chips")
+
+                            line_chart_container = ui.column().classes("w-full")
+
+                            def _render_line_chart():
+                                line_chart_container.clear()
+                                selected_cats = cat_line_select.value or []
+                                sel = selected_cats[:3]
+                                with line_chart_container:
+                                    render_category_expenses_chart(
+                                        year=st.year,
+                                        categories=sel,
+                                        kind=kind,
+                                    )
+
+                            cat_line_select.on_value_change(lambda _: _render_line_chart())
+                            _render_line_chart()
 
                     summary_content()
 

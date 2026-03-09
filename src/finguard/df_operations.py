@@ -612,6 +612,30 @@ class InvestmentHoldings:
         )
         self.save()
 
+    def set_category(self, asset_name: str, category: str) -> None:
+        """Update the category for an asset."""
+        if asset_name not in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{asset_name}' not found.")
+        if category not in _INVESTMENT_CATEGORIES:
+            raise ValueError(
+                f"'{category}' is not a valid category. "
+                f"Choose from: {_INVESTMENT_CATEGORIES}"
+            )
+        mask = self.df["asset_name"] == asset_name
+        self.df = self.df.with_columns(
+            pl.when(mask)
+            .then(pl.lit(category))
+            .otherwise(pl.col("category"))
+            .alias("category")
+        )
+        self.df_prices = self.df_prices.with_columns(
+            pl.when(self.df_prices["asset_name"] == asset_name)
+            .then(pl.lit(category))
+            .otherwise(pl.col("category"))
+            .alias("category")
+        )
+        self.save()
+
     def set_link(self, asset_name: str, link: str) -> None:
         """Update the link URL for an asset."""
         if asset_name not in self.df["asset_name"].to_list():
@@ -803,6 +827,24 @@ class Liquidity:
             .then(pl.lit(new_name))
             .otherwise(pl.col("asset_name"))
             .alias("asset_name")
+        )
+        self.save()
+
+    def set_category(self, asset_name: str, category: str) -> None:
+        """Update the category for a liquidity asset."""
+        if asset_name not in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{asset_name}' not found.")
+        if category not in _LIQUIDITY_CATEGORIES:
+            raise ValueError(
+                f"'{category}' is not a valid category. "
+                f"Choose from: {_LIQUIDITY_CATEGORIES}"
+            )
+        mask = self.df["asset_name"] == asset_name
+        self.df = self.df.with_columns(
+            pl.when(mask)
+            .then(pl.lit(category))
+            .otherwise(pl.col("category"))
+            .alias("category")
         )
         self.save()
 

@@ -184,6 +184,7 @@ def _build_investment_table(
                                 def _make_edit_asset(
                                     _inv=inv,
                                     _asset=asset,
+                                    _cat=cat,
                                     _link=link,
                                     _refresh=refresh_fn,
                                 ):
@@ -198,12 +199,18 @@ def _build_investment_table(
                                             inp_name = ui.input(
                                                 "Name", value=_asset
                                             ).classes("w-full")
+                                            inp_cat = ui.select(
+                                                options=_INVESTMENT_CATEGORIES,
+                                                label="Category",
+                                                value=_cat,
+                                            ).classes("w-full")
                                             inp_url = ui.input(
                                                 "Link URL", value=_link
                                             ).classes("w-full")
 
                                             def save_changes():
                                                 new_name = inp_name.value.strip()
+                                                new_cat = inp_cat.value
                                                 new_link = inp_url.value.strip()
                                                 if not new_name:
                                                     ui.notify(
@@ -215,6 +222,10 @@ def _build_investment_table(
                                                     if new_name != _asset:
                                                         _inv.rename_asset(
                                                             _asset, new_name
+                                                        )
+                                                    if new_cat != _cat:
+                                                        _inv.set_category(
+                                                            new_name, new_cat
                                                         )
                                                     if new_link != _link:
                                                         _inv.set_link(
@@ -349,6 +360,8 @@ def _build_simple_value_table(
     set_fn,
     remove_fn,
     rename_fn=None,
+    set_category_fn=None,
+    categories: list[str] | None = None,
     refresh_fn,
     on_cell_change=None,
 ) -> None:
@@ -400,6 +413,10 @@ def _build_simple_value_table(
                                 def _make_edit_name(
                                     _rename_fn=rename_fn,
                                     _name=row_name,
+                                    _type_col=type_col,
+                                    _cur_cat=row_dict.get(type_col, "") if type_col else None,
+                                    _set_category_fn=set_category_fn,
+                                    _categories=categories,
                                     _refresh=refresh_fn,
                                     _on_cell_change=on_cell_change,
                                 ):
@@ -408,14 +425,24 @@ def _build_simple_value_table(
                                             ui.dialog() as dlg,
                                             ui.card().classes("w-96"),
                                         ):
-                                            ui.label(f"Rename {_name}").classes(
+                                            ui.label(f"Edit {_name}").classes(
                                                 "text-sm font-semibold mb-2"
                                             )
                                             inp_name = ui.input(
                                                 "Name", value=_name
                                             ).classes("w-full")
+                                            inp_cat = None
+                                            if (
+                                                _set_category_fn is not None
+                                                and _categories is not None
+                                            ):
+                                                inp_cat = ui.select(
+                                                    options=_categories,
+                                                    label="Category",
+                                                    value=_cur_cat,
+                                                ).classes("w-full")
 
-                                            def save_name():
+                                            def save_changes():
                                                 new_name = inp_name.value.strip()
                                                 if not new_name:
                                                     ui.notify(
@@ -423,11 +450,16 @@ def _build_simple_value_table(
                                                         type="warning",
                                                     )
                                                     return
-                                                if new_name == _name:
-                                                    dlg.close()
-                                                    return
                                                 try:
-                                                    _rename_fn(_name, new_name)
+                                                    if new_name != _name:
+                                                        _rename_fn(_name, new_name)
+                                                    if (
+                                                        inp_cat is not None
+                                                        and inp_cat.value != _cur_cat
+                                                    ):
+                                                        _set_category_fn(
+                                                            new_name, inp_cat.value
+                                                        )
                                                 except ValueError as exc:
                                                     ui.notify(
                                                         str(exc), type="negative"
@@ -441,7 +473,7 @@ def _build_simple_value_table(
 
                                             with ui.row().classes("mt-2"):
                                                 ui.button(
-                                                    "Save", on_click=save_name
+                                                    "Save", on_click=save_changes
                                                 )
                                                 ui.button(
                                                     "Cancel", on_click=dlg.close
@@ -1236,6 +1268,8 @@ def index():
                                 set_fn=liq.set_value,
                                 remove_fn=liq.remove_asset,
                                 rename_fn=liq.rename_asset,
+                                set_category_fn=liq.set_category,
+                                categories=_LIQUIDITY_CATEGORIES,
                                 refresh_fn=liquidity_content.refresh,
                                 on_cell_change=lambda: _refreshables[
                                     "total_networth_content"
@@ -1340,6 +1374,36 @@ def index():
                             for i in range(12)
                         ]
 
+                        # Previous December net worth for January change
+                        prev_year = st.year - 1
+                        try:
+                            p_inv = InvestmentHoldings(year=prev_year)
+                            p_liq = Liquidity(year=prev_year)
+                            p_cd = CreditsDebts(year=prev_year)
+                            dec = "12"
+                            prev_dec_nw = (
+                                (p_inv.df_value[dec].sum() if p_inv.df_value.height else 0.0)
+                                + (p_liq.df[dec].sum() if p_liq.df.height else 0.0)
+                                + (p_cd.df[dec].sum() if p_cd.df.height else 0.0)
+                            )
+                        except Exception:
+                            prev_dec_nw = None
+
+                        nw_change: list[float | None] = []
+                        pct_nw_change: list[float | None] = []
+                        for i in range(12):
+                            prev = prev_dec_nw if i == 0 else net_totals[i - 1]
+                            cur = net_totals[i]
+                            if prev is not None and prev != 0.0 and cur:
+                                nw_change.append(cur - prev)
+                                pct_nw_change.append((cur - prev) / prev * 100)
+                            elif prev is not None and cur:
+                                nw_change.append(cur - prev)
+                                pct_nw_change.append(None)
+                            else:
+                                nw_change.append(None)
+                                pct_nw_change.append(None)
+
                         ui.label(f"Net Worth \u2014 {st.year}").classes(
                             "text-lg font-bold mt-2 mb-4"
                         )
@@ -1349,6 +1413,8 @@ def index():
                             ("Liquidity", liq_totals),
                             ("Credits/Debts", cd_totals),
                             ("Net Worth", net_totals),
+                            ("NW Change", nw_change),
+                            ("% NW Change", pct_nw_change),
                         ]
 
                         with (
@@ -1379,6 +1445,7 @@ def index():
                             with ui.element("tbody"):
                                 for label, values in rows_data:
                                     is_total = label == "Net Worth"
+                                    is_pct = label == "% NW Change"
                                     border_top = " border-t-2" if is_total else ""
                                     weight = "font-bold" if is_total else ""
                                     with ui.element("tr").classes(border_top):
@@ -1390,7 +1457,12 @@ def index():
                                             with ui.element("td").classes(
                                                 "px-1 py-0 border-r text-right"
                                             ):
-                                                txt = f"{v:,.2f}" if v else ""
+                                                if v is None or v == 0.0:
+                                                    txt = ""
+                                                elif is_pct:
+                                                    txt = f"{v:,.2f}%"
+                                                else:
+                                                    txt = f"{v:,.2f}"
                                                 ui.label(txt).classes(
                                                     f"text-xs {weight}"
                                                 )

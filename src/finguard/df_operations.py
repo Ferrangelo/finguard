@@ -8,6 +8,7 @@ from finguard.config import get_mapping
 from finguard.paths import (
     CASHFLOW_FILENAME,
     INVESTMENTS_FILENAME,
+    INVESTMENTS_PRICES_FILENAME,
     PRIMARIES_FILENAME,
     SECONDARIES_FILENAME,
     get_monthly_parquet_path,
@@ -123,7 +124,10 @@ class DetailedExpenses:
         if Path(self.expense_df_path).exists():
             self.expense_df = pl.read_parquet(self.expense_df_path)
             # Ensure expense_date is Date (older files may store it as Int64).
-            if "expense_date" in self.expense_df.columns and self.expense_df["expense_date"].dtype != pl.Date:
+            if (
+                "expense_date" in self.expense_df.columns
+                and self.expense_df["expense_date"].dtype != pl.Date
+            ):
                 self.expense_df = self.expense_df.with_columns(
                     pl.col("expense_date").cast(pl.Date)
                 )
@@ -266,20 +270,24 @@ class DetailedExpenses:
         sorted_month_cols = sorted(month_cols)
         summary = summary.filter(pl.col(category_col) != "Total")
         totals = ["Total"] + [summary[c].sum() for c in sorted_month_cols]
-        summary = pl.concat([
-            summary,
-            pl.DataFrame({col: [val] for col, val in zip(ordered_cols, totals)})
-        ], how="diagonal")
+        summary = pl.concat(
+            [
+                summary,
+                pl.DataFrame({col: [val] for col, val in zip(ordered_cols, totals)}),
+            ],
+            how="diagonal",
+        )
 
         # sort rows by canonical category order (primary only)
         if kind == "primary":
-            order_df = pl.DataFrame({
-                category_col: _PRIMARY_CATEGORY_ORDER + ["Total"],
-                "_order": list(range(len(_PRIMARY_CATEGORY_ORDER) + 1)),
-            })
+            order_df = pl.DataFrame(
+                {
+                    category_col: _PRIMARY_CATEGORY_ORDER + ["Total"],
+                    "_order": list(range(len(_PRIMARY_CATEGORY_ORDER) + 1)),
+                }
+            )
             summary = (
-                summary
-                .join(order_df, on=category_col, how="left")
+                summary.join(order_df, on=category_col, how="left")
                 .sort("_order", nulls_last=True)
                 .drop("_order")
             )
@@ -406,7 +414,7 @@ class Cashflow:
     # ------------------------------------------------------------------
     # Internal functions
     # ------------------------------------------------------------------
-    
+
     def set_income(self, month: int, category: str, value: float) -> None:
         """Set an income-category value for a given month.
 
@@ -447,17 +455,13 @@ class Cashflow:
             month_label = f"{self.year}-{month:02d}"
 
             # Income = sum of income categories
-            income = sum(
-                self._get_value(cat, col) for cat in _INCOME_CATEGORIES
-            )
+            income = sum(self._get_value(cat, col) for cat in _INCOME_CATEGORIES)
             self._set_value("Income", col, income)
 
             # Spending = "Total" row from primaries.parquet for this month
             spending = 0.0
             if primaries is not None and month_label in primaries.columns:
-                total_rows = primaries.filter(
-                    pl.col("primary_category") == "Total"
-                )
+                total_rows = primaries.filter(pl.col("primary_category") == "Total")
                 if total_rows.height > 0:
                     spending = total_rows[month_label][0]
             self._set_value("Spending", col, spending)
@@ -522,21 +526,32 @@ class InvestmentHoldings:
     def __init__(self, year: int):
         self.year = year
         self._path = get_year_summary_path(year, INVESTMENTS_FILENAME)
+        self._path_prices = get_year_summary_path(year, INVESTMENTS_PRICES_FILENAME)
 
-        if self._path.exists():
-            self.df = pl.read_parquet(str(self._path))
-            # Back-fill 'link' column for files saved before it was added.
-            if "link" not in self.df.columns:
-                self.df = self.df.with_columns(pl.lit("").alias("link"))
-        else:
-            self.df = pl.DataFrame(
-                schema={
-                    "asset_name": pl.Utf8,
-                    "category": pl.Utf8,
-                    "link": pl.Utf8,
-                    **{f"{m:02d}": pl.Float64 for m in range(1, 13)},
-                }
-            )
+        self._path_dict = {
+            "holdings": get_year_summary_path(year, INVESTMENTS_FILENAME),
+            "prices": get_year_summary_path(year, INVESTMENTS_PRICES_FILENAME),
+        }
+
+        for filetype, filepath in self._path_dict.items():
+            if filepath.exists():
+                df = pl.read_parquet(str(filepath))
+                if "link" not in df.columns:
+                    df = df.with_columns(pl.lit("").alias("link"))
+            else:
+                df = pl.DataFrame(
+                    schema={
+                        "asset_name": pl.Utf8,
+                        "category": pl.Utf8,
+                        "link": pl.Utf8,
+                        **{f"{m:02d}": pl.Float64 for m in range(1, 13)},
+                    }
+                )
+
+            if filetype == "prices":
+                self.df_prices = df
+            else:
+                self.df = df
 
     # ------------------------------------------------------------------
     # Public API
@@ -565,11 +580,13 @@ class InvestmentHoldings:
             }
         )
         self.df = pl.concat([self.df, new_row], how="diagonal")
+        self.df_prices = pl.concat([self.df_prices, new_row], how="diagonal")
         self.save()
 
     def remove_asset(self, asset_name: str) -> None:
         """Remove an asset row by name."""
         self.df = self.df.filter(pl.col("asset_name") != asset_name)
+        self.df_prices = self.df_prices.filter(pl.col("asset_name") != asset_name)
         self.save()
 
     def set_link(self, asset_name: str, link: str) -> None:
@@ -580,10 +597,17 @@ class InvestmentHoldings:
         self.df = self.df.with_columns(
             pl.when(mask).then(pl.lit(link)).otherwise(pl.col("link")).alias("link")
         )
+        self.df_prices = self.df_prices.with_columns(
+            pl.when(mask).then(pl.lit(link)).otherwise(pl.col("link")).alias("link")
+        )
         self.save()
 
-    def set_quantity(
-        self, asset_name: str, month: int, quantity: float
+    def set_quantity_or_price(
+        self,
+        asset_name: str,
+        month: int,
+        quantity: float,
+        quant_or_price: str = "quantity",
     ) -> None:
         """Set the quantity for an asset in a given month.
 
@@ -603,11 +627,48 @@ class InvestmentHoldings:
 
         col = f"{month:02d}"
         mask = self.df["asset_name"] == asset_name
-        self.df = self.df.with_columns(
-            pl.when(mask).then(pl.lit(quantity)).otherwise(pl.col(col)).alias(col)
+        if quant_or_price == "quantity":
+            self.df = self.df.with_columns(
+                pl.when(mask).then(pl.lit(quantity)).otherwise(pl.col(col)).alias(col)
+            )
+            self.save_df()
+        elif quant_or_price == "price":
+            self.df_prices = self.df_prices.with_columns(
+                pl.when(mask).then(pl.lit(quantity)).otherwise(pl.col(col)).alias(col)
+            )
+            self.save_df_prices()
+        else:
+            raise ValueError(
+                f"quant_or_price must be 'quantity' or 'price', got '{quant_or_price}'"
+            )
+            
+    def set_quantity(self, asset_name: str, month: int, quantity: float) -> None:
+        """Set the quantity for an asset in a given month."""
+        self.set_quantity_or_price(
+            asset_name=asset_name,
+            month=month,
+            quantity=quantity,
+            quant_or_price="quantity",
+            )
+
+    def set_price(self, asset_name: str, month: int, price: float) -> None:
+        """Set the price for an asset in a given month."""
+        self.set_quantity_or_price(
+            asset_name=asset_name,
+            month=month,
+            quantity=price,
+            quant_or_price="price",
         )
-        self.save()
+
+    def save_df(self) -> None:
+        """Write the holdings dataframe to disk."""
+        self.df.write_parquet(str(self._path))
+
+    def save_df_prices(self) -> None:
+        """Write the prices dataframe to disk."""
+        self.df_prices.write_parquet(str(self._path_prices))
 
     def save(self) -> None:
         """Write the holdings dataframe to disk."""
-        self.df.write_parquet(str(self._path))
+        self.save_df()
+        self.save_df_prices()

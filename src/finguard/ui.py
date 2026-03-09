@@ -33,13 +33,49 @@ from finguard.paths import (
 _MONTH_NAMES: dict[int, str] = {i: calendar.month_name[i] for i in range(1, 13)}
 
 _EXPENSE_COLUMNS = [
-    {"name": "expense_name", "label": "Name", "field": "expense_name", "align": "left", "sortable": True},
-    {"name": "expense_date", "label": "Date", "field": "expense_date", "align": "left", "sortable": True},
-    {"name": "expense_amount", "label": "Amount", "field": "expense_amount", "align": "right", "sortable": True},
+    {
+        "name": "expense_name",
+        "label": "Name",
+        "field": "expense_name",
+        "align": "left",
+        "sortable": True,
+    },
+    {
+        "name": "expense_date",
+        "label": "Date",
+        "field": "expense_date",
+        "align": "left",
+        "sortable": True,
+    },
+    {
+        "name": "expense_amount",
+        "label": "Amount",
+        "field": "expense_amount",
+        "align": "right",
+        "sortable": True,
+    },
     {"name": "currency", "label": "Cur", "field": "currency", "align": "center"},
-    {"name": "expense_in_ref_currency", "label": "Ref Amount", "field": "expense_in_ref_currency", "align": "right", "sortable": True},
-    {"name": "primary_category", "label": "Primary", "field": "primary_category", "align": "left", "sortable": True},
-    {"name": "secondary_category", "label": "Secondary", "field": "secondary_category", "align": "left", "sortable": True},
+    {
+        "name": "expense_in_ref_currency",
+        "label": "Ref Amount",
+        "field": "expense_in_ref_currency",
+        "align": "right",
+        "sortable": True,
+    },
+    {
+        "name": "primary_category",
+        "label": "Primary",
+        "field": "primary_category",
+        "align": "left",
+        "sortable": True,
+    },
+    {
+        "name": "secondary_category",
+        "label": "Secondary",
+        "field": "secondary_category",
+        "align": "left",
+        "sortable": True,
+    },
     {"name": "actions", "label": "", "field": "actions", "align": "center"},
 ]
 
@@ -47,6 +83,7 @@ _EXPENSE_COLUMNS = [
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _discover_years() -> list[int]:
     """Return sorted years with data directories, always including the current year."""
@@ -77,6 +114,7 @@ def _df_to_rows(df: pl.DataFrame) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Page
 # ---------------------------------------------------------------------------
+
 
 @ui.page("/")
 def index():
@@ -163,23 +201,32 @@ def index():
             inp_date = ui.input("Date (YYYY-MM-DD)", value=row.get("expense_date", ""))
             inp_amount = ui.number("Amount", value=row.get("expense_amount", 0))
             inp_cur = ui.input("Currency", value=row.get("currency", "E"))
-            inp_pri = ui.input("Primary Category", value=row.get("primary_category", ""))
-            inp_sec = ui.input("Secondary Category", value=row.get("secondary_category", ""))
+            inp_pri = ui.input(
+                "Primary Category", value=row.get("primary_category", "")
+            )
+            inp_sec = ui.input(
+                "Secondary Category", value=row.get("secondary_category", "")
+            )
 
             def do_save():
                 if inp_amount.value is None:
                     ui.notify("Amount is required", type="warning")
                     return
                 try:
-                    save_edit(row_id, {
-                        "expense_name": inp_name.value,
-                        "expense_date": inp_date.value,
-                        "expense_amount": float(inp_amount.value),
-                        "currency": inp_cur.value,
-                        "expense_in_ref_currency": float(inp_amount.value),
-                        "primary_category": normalize_category_value(inp_pri.value),
-                        "secondary_category": normalize_category_value(inp_sec.value),
-                    })
+                    save_edit(
+                        row_id,
+                        {
+                            "expense_name": inp_name.value,
+                            "expense_date": inp_date.value,
+                            "expense_amount": float(inp_amount.value),
+                            "currency": inp_cur.value,
+                            "expense_in_ref_currency": float(inp_amount.value),
+                            "primary_category": normalize_category_value(inp_pri.value),
+                            "secondary_category": normalize_category_value(
+                                inp_sec.value
+                            ),
+                        },
+                    )
                     dlg.close()
                 except Exception as exc:
                     ui.notify(str(exc), type="negative")
@@ -202,8 +249,12 @@ def index():
             def on_name_blur():
                 mapping = get_mapping(inp_name.value)
                 if mapping:
-                    inp_pri.value = normalize_category_value(mapping["primary_category"])
-                    inp_sec.value = normalize_category_value(mapping["secondary_category"])
+                    inp_pri.value = normalize_category_value(
+                        mapping["primary_category"]
+                    )
+                    inp_sec.value = normalize_category_value(
+                        mapping["secondary_category"]
+                    )
                     inp_pri.update()
                     inp_sec.update()
                     ui.notify(f"Auto-mapped to {inp_pri.value}", type="info")
@@ -260,11 +311,16 @@ def index():
         st.year = e.value
         load_data()
         refresh_table()
+        summary_content.refresh()
+        cashflow_content.refresh()
+        investment_content.refresh()
 
     def on_month_change(e):
         st.month = e.value
         load_data()
         refresh_table()
+        summary_content.refresh()
+        investment_content.refresh()
 
     # ========================================================================
     # BUILD PAGE
@@ -292,136 +348,254 @@ def index():
     # -- tabs ----------------------------------------------------------------
     with ui.tabs().classes("w-full") as tabs:
         ui.tab("Expenses")
-        ui.tab("Summary")
+        # ui.tab("Summary")
         ui.tab("Cashflow")
         ui.tab("NetWorth")
-        ui.tab("Mappings")
+        # ui.tab("Mappings")
 
     with ui.tab_panels(tabs, value="Expenses").classes("w-full"):
-
         # ===================== EXPENSES TAB =================================
         with ui.tab_panel("Expenses"):
-            with ui.row().classes("w-full items-end gap-4 mb-4"):
-                ui.input(
-                    "Search name",
-                    on_change=lambda e: (
-                        setattr(st, "filter_name", e.value or ""),
-                        refresh_table(),
-                    ),
-                ).classes("w-48")
-                ui.input(
-                    "Filter category",
-                    on_change=lambda e: (
-                        setattr(st, "filter_category", e.value or ""),
-                        refresh_table(),
-                    ),
-                ).classes("w-48")
-                ui.number(
-                    "Min amount",
-                    on_change=lambda e: (
-                        setattr(st, "filter_amount_min", e.value),
-                        refresh_table(),
-                    ),
-                ).classes("w-32")
-                ui.number(
-                    "Max amount",
-                    on_change=lambda e: (
-                        setattr(st, "filter_amount_max", e.value),
-                        refresh_table(),
-                    ),
-                ).classes("w-32")
-                ui.button("Add Expense", icon="add", on_click=open_add_dialog)
+            with ui.tabs().classes("w-full") as exp_subtabs:
+                ui.tab("Detailed expenses")
+                ui.tab("Summary")
+                ui.tab("Mappings expense-categories")
+                # Future subtabs for different views/filters could go here
 
-            expenses_table = ui.table(
-                columns=_EXPENSE_COLUMNS,
-                rows=[],
-                row_key="id",
-                pagination={"rowsPerPage": 25},
-            ).classes("w-full")
+            with ui.tab_panels(exp_subtabs, value="Detailed expenses").classes(
+                "w-full"
+            ):
+                with ui.tab_panel("Detailed expenses"):
+                    with ui.row().classes("w-full items-end gap-4 mb-4"):
+                        ui.input(
+                            "Search name",
+                            on_change=lambda e: (
+                                setattr(st, "filter_name", e.value or ""),
+                                refresh_table(),
+                            ),
+                        ).classes("w-48")
+                        ui.input(
+                            "Filter category",
+                            on_change=lambda e: (
+                                setattr(st, "filter_category", e.value or ""),
+                                refresh_table(),
+                            ),
+                        ).classes("w-48")
+                        ui.number(
+                            "Min amount",
+                            on_change=lambda e: (
+                                setattr(st, "filter_amount_min", e.value),
+                                refresh_table(),
+                            ),
+                        ).classes("w-32")
+                        ui.number(
+                            "Max amount",
+                            on_change=lambda e: (
+                                setattr(st, "filter_amount_max", e.value),
+                                refresh_table(),
+                            ),
+                        ).classes("w-32")
+                        ui.button("Add Expense", icon="add", on_click=open_add_dialog)
 
-            expenses_table.add_slot(
-                "body-cell-actions",
-                """
-                <q-td :props="props">
-                    <q-btn flat dense icon="edit" color="primary"
-                           @click="$parent.$emit('edit', props.row)" />
-                    <q-btn flat dense icon="delete" color="negative"
-                           @click="$parent.$emit('delete', props.row)" />
-                </q-td>
-                """,
-            )
-            expenses_table.on("edit", lambda e: open_edit_dialog(e.args))
-            expenses_table.on("delete", lambda e: confirm_delete(e.args))
-
-        # ===================== SUMMARY TAB ==================================
-        with ui.tab_panel("Summary"):
-            summary_kind = ui.toggle(["Primary", "Secondary"], value="Primary")
-
-            @ui.refreshable
-            def summary_content():
-                if st.de is None:
-                    return
-                kind = "primary" if summary_kind.value == "Primary" else "secondary"
-                cat_col = f"{kind}_category"
-
-                # -- monthly summary for selected month --
-                monthly = st.de.create_expenses_summary_table(cat_col)
-                ui.label(
-                    f"Monthly \u2014 {_MONTH_NAMES[st.month]} {st.year}"
-                ).classes("text-lg font-bold mt-4")
-                if monthly.height > 0:
-                    cols = [
-                        {
-                            "name": c,
-                            "label": c.replace("_", " ").title(),
-                            "field": c,
-                            "align": "left" if i == 0 else "right",
-                            "sortable": True,
-                        }
-                        for i, c in enumerate(monthly.columns)
-                    ]
-                    ui.table(
-                        columns=cols, rows=_df_to_rows(monthly), row_key="id"
+                    expenses_table = ui.table(
+                        columns=_EXPENSE_COLUMNS,
+                        rows=[],
+                        row_key="id",
+                        pagination={"rowsPerPage": 25},
                     ).classes("w-full")
-                else:
-                    ui.label("No data for this month.").classes("text-gray-500")
 
-                # -- cumulative year summary (if exists) --
-                fn = PRIMARIES_FILENAME if kind == "primary" else SECONDARIES_FILENAME
-                path = get_year_summary_path(st.year, fn)
-                if path.exists():
-                    ui.label(f"Cumulative \u2014 {st.year}").classes(
-                        "text-lg font-bold mt-6"
+                    expenses_table.add_slot(
+                        "body-cell-actions",
+                        """
+                        <q-td :props="props">
+                            <q-btn flat dense icon="edit" color="primary"
+                                @click="$parent.$emit('edit', props.row)" />
+                            <q-btn flat dense icon="delete" color="negative"
+                                @click="$parent.$emit('delete', props.row)" />
+                        </q-td>
+                        """,
                     )
-                    cum = pl.read_parquet(str(path))
-                    cols = [
-                        {
-                            "name": c,
-                            "label": c.replace("_", " ").title() if "_" in c else c,
-                            "field": c,
-                            "align": "left" if i == 0 else "right",
-                            "sortable": True,
-                        }
-                        for i, c in enumerate(cum.columns)
-                    ]
-                    ui.table(
-                        columns=cols, rows=_df_to_rows(cum), row_key="id"
-                    ).classes("w-full")
+                    expenses_table.on("edit", lambda e: open_edit_dialog(e.args))
+                    expenses_table.on("delete", lambda e: confirm_delete(e.args))
 
-            summary_content()
+                # ===================== SUMMARY TAB ==================================
+                with ui.tab_panel("Summary"):
+                    summary_kind = ui.toggle(["Primary", "Secondary"], value="Primary")
 
-            summary_kind.on_value_change(lambda _: summary_content.refresh())
+                    @ui.refreshable
+                    def summary_content():
+                        if st.de is None:
+                            return
+                        kind = (
+                            "primary"
+                            if summary_kind.value == "Primary"
+                            else "secondary"
+                        )
+                        cat_col = f"{kind}_category"
 
-            def update_summaries():
-                if st.de is None:
-                    return
-                st.de.update_all_summary_tables()
-                summary_content.refresh()
-                ui.notify("Summary tables updated", type="positive")
+                        # -- monthly summary for selected month --
+                        monthly = st.de.create_expenses_summary_table(cat_col)
+                        ui.label(
+                            f"Monthly \u2014 {_MONTH_NAMES[st.month]} {st.year}"
+                        ).classes("text-lg font-bold mt-4")
+                        if monthly.height > 0:
+                            cols = [
+                                {
+                                    "name": c,
+                                    "label": c.replace("_", " ").title(),
+                                    "field": c,
+                                    "align": "left" if i == 0 else "right",
+                                    "sortable": True,
+                                }
+                                for i, c in enumerate(monthly.columns)
+                            ]
+                            ui.table(
+                                columns=cols, rows=_df_to_rows(monthly), row_key="id"
+                            ).classes("w-full")
+                        else:
+                            ui.label("No data for this month.").classes("text-gray-500")
 
-            ui.button(
-                "Regenerate Summaries", icon="refresh", on_click=update_summaries
-            ).classes("mt-4")
+                        # -- cumulative year summary (if exists) --
+                        fn = (
+                            PRIMARIES_FILENAME
+                            if kind == "primary"
+                            else SECONDARIES_FILENAME
+                        )
+                        path = get_year_summary_path(st.year, fn)
+                        if path.exists():
+                            ui.label(f"Cumulative \u2014 {st.year}").classes(
+                                "text-lg font-bold mt-6"
+                            )
+                            cum = pl.read_parquet(str(path))
+                            cols = [
+                                {
+                                    "name": c,
+                                    "label": c.replace("_", " ").title()
+                                    if "_" in c
+                                    else c,
+                                    "field": c,
+                                    "align": "left" if i == 0 else "right",
+                                    "sortable": True,
+                                }
+                                for i, c in enumerate(cum.columns)
+                            ]
+                            ui.table(
+                                columns=cols, rows=_df_to_rows(cum), row_key="id"
+                            ).classes("w-full")
+
+                    summary_content()
+
+                    summary_kind.on_value_change(lambda _: summary_content.refresh())
+
+                    def update_summaries():
+                        if st.de is None:
+                            return
+                        st.de.update_all_summary_tables()
+                        summary_content.refresh()
+                        ui.notify("Summary tables updated", type="positive")
+
+                    ui.button(
+                        "Regenerate Summaries",
+                        icon="refresh",
+                        on_click=update_summaries,
+                    ).classes("mt-4")
+
+                    # ===================== MAPPINGS TAB =================================
+                with ui.tab_panel("Mappings expense-categories"):
+
+                    @ui.refreshable
+                    def mappings_content():
+                        mappings = get_all_mappings()
+
+                        with ui.row().classes("items-end gap-4 mb-4"):
+                            new_name = ui.input("Expense Name").classes("w-48")
+                            new_pri = ui.input("Primary Category").classes("w-48")
+                            new_sec = ui.input("Secondary Category").classes("w-48")
+
+                            def do_add_mapping():
+                                if not new_name.value or not new_pri.value:
+                                    ui.notify(
+                                        "Name and primary category are required",
+                                        type="warning",
+                                    )
+                                    return
+                                try:
+                                    config_add_mapping(
+                                        new_name.value,
+                                        new_pri.value,
+                                        new_sec.value or "",
+                                    )
+                                    ui.notify(
+                                        f'Mapping added for "{new_name.value}"',
+                                        type="positive",
+                                    )
+                                    mappings_content.refresh()
+                                except ValueError as exc:
+                                    ui.notify(str(exc), type="negative")
+
+                            ui.button(
+                                "Add Mapping", icon="add", on_click=do_add_mapping
+                            )
+
+                        if mappings:
+                            mcols = [
+                                {
+                                    "name": "expense_name",
+                                    "label": "Expense Name",
+                                    "field": "expense_name",
+                                    "align": "left",
+                                    "sortable": True,
+                                },
+                                {
+                                    "name": "primary_category",
+                                    "label": "Primary",
+                                    "field": "primary_category",
+                                    "align": "left",
+                                    "sortable": True,
+                                },
+                                {
+                                    "name": "secondary_category",
+                                    "label": "Secondary",
+                                    "field": "secondary_category",
+                                    "align": "left",
+                                    "sortable": True,
+                                },
+                                {
+                                    "name": "actions",
+                                    "label": "",
+                                    "field": "actions",
+                                    "align": "center",
+                                },
+                            ]
+                            mrows = [
+                                {"id": i, "expense_name": name, **m}
+                                for i, (name, m) in enumerate(mappings.items())
+                            ]
+                            mt = ui.table(
+                                columns=mcols, rows=mrows, row_key="id"
+                            ).classes("w-full")
+                            mt.add_slot(
+                                "body-cell-actions",
+                                """
+                                <q-td :props="props">
+                                    <q-btn flat dense icon="delete" color="negative"
+                                        @click="$parent.$emit('delete', props.row)" />
+                                </q-td>
+                                """,
+                            )
+
+                            def do_delete_mapping(e):
+                                config_remove_mapping(e.args["expense_name"])
+                                ui.notify("Mapping removed", type="positive")
+                                mappings_content.refresh()
+
+                            mt.on("delete", do_delete_mapping)
+                        else:
+                            ui.label("No mappings configured yet.").classes(
+                                "text-gray-500"
+                            )
+
+                    mappings_content()
 
         # ===================== CASHFLOW TAB =================================
         with ui.tab_panel("Cashflow"):
@@ -437,9 +611,11 @@ def index():
                 month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
                 derived = {"Income", "Spending", "Saving", "Saving %"}
 
-                with ui.element("table").classes(
-                    "w-full border-collapse text-sm"
-                ).style("border-spacing: 0"):
+                with (
+                    ui.element("table")
+                    .classes("w-full border-collapse text-sm")
+                    .style("border-spacing: 0")
+                ):
                     # Header
                     with ui.element("thead"):
                         with ui.element("tr"):
@@ -447,9 +623,11 @@ def index():
                                 "text-left px-2 py-1 border-b border-r"
                             ).style("min-width:160px")
                             for abbr in month_abbrs:
-                                with ui.element("th").classes(
-                                    "text-right px-2 py-1 border-b border-r"
-                                ).style("min-width:80px"):
+                                with (
+                                    ui.element("th")
+                                    .classes("text-right px-2 py-1 border-b border-r")
+                                    .style("min-width:80px")
+                                ):
                                     ui.label(abbr).classes("text-xs font-bold")
 
                     # Body
@@ -503,9 +681,7 @@ def index():
                                             )
                                         else:
                                             # Editable income input
-                                            def _make_handler(
-                                                _cf=cf, _m=m, _cat=cat
-                                            ):
+                                            def _make_handler(_cf=cf, _m=m, _cat=cat):
                                                 def handler(e):
                                                     try:
                                                         v = (
@@ -538,270 +714,276 @@ def index():
 
         # ===================== NETWORTH TAB =================================
         with ui.tab_panel("NetWorth"):
+            # Sub-tabs for NetWorth
+            with ui.tabs().classes("w-full") as networth_tabs:
+                ui.tab("Investments")
+                ui.tab("Liquidity")
+                ui.tab("Total NetWorth")
 
-            @ui.refreshable
-            def networth_content():
-                inv = InvestmentHoldings(year=st.year)
+            with ui.tab_panels(networth_tabs, value="Investments").classes("w-full"):
+                with ui.tab_panel("Liquidity"):
+                    # Your liquidity content here
+                    def liquidity_content():
+                        ui.label("Liquidity details go here.")
 
-                ui.label(f'Investment Holdings \u2014 {st.year} (quantity in number of "shares")').classes(
-                    "text-lg font-bold mt-2 mb-4"
-                )
+                    liquidity_content()
 
-                # -- Add asset form ------------------------------------------
-                with ui.card().classes("mb-4"):
-                    ui.label("Add Asset").classes("text-sm font-semibold mb-2")
-                    with ui.row().classes("items-end gap-4"):
-                        inp_asset = ui.input("Asset name").classes("w-48")
-                        inp_cat = ui.select(
-                            options=_INVESTMENT_CATEGORIES,
-                            label="Category",
-                            value=_INVESTMENT_CATEGORIES[0],
-                        ).classes("w-40")
-                        inp_link = ui.input("Link (optional)").classes("w-64")
+                with ui.tab_panel("Total NetWorth"):
+                    # Your total networth content here
+                    def total_networth_content():
+                        ui.label("Total NetWorth details go here.")
 
-                        def do_add_asset():
-                            name = inp_asset.value.strip()
-                            if not name:
-                                ui.notify("Asset name is required", type="warning")
-                                return
-                            try:
-                                inv.add_asset(name, inp_cat.value, inp_link.value.strip())
-                                inp_asset.value = ""
-                                inp_link.value = ""
-                                networth_content.refresh()
-                                ui.notify(f"Asset '{name}' added", type="positive")
-                            except ValueError as exc:
-                                ui.notify(str(exc), type="negative")
+                    total_networth_content()
 
-                        ui.button("Add", icon="add", on_click=do_add_asset)
+                with ui.tab_panel("Investments"):
 
-                # -- Holdings table ------------------------------------------
-                if inv.df.height == 0:
-                    ui.label("No assets yet.").classes("text-gray-500")
-                else:
-                    month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
+                    @ui.refreshable
+                    def investment_content():
+                        inv = InvestmentHoldings(year=st.year)
 
-                    with ui.element("table").classes(
-                        "w-full border-collapse text-sm"
-                    ).style("border-spacing:0"):
-                        # Header
-                        with ui.element("thead"):
-                            with ui.element("tr"):
-                                for label, min_w in [
-                                    ("Asset", "160px"),
-                                    ("Category", "110px"),
-                                ]:
-                                    with ui.element("th").classes(
-                                        "text-left px-2 py-1 border-b border-r"
-                                    ).style(f"min-width:{min_w}"):
-                                        ui.label(label).classes(
-                                            "text-xs font-bold"
+                        ui.label(
+                            f'Investment Holdings \u2014 {st.year} (quantity in number of "shares")'
+                        ).classes("text-lg font-bold mt-2 mb-4")
+
+                        # -- Add asset form ------------------------------------------
+                        with ui.card().classes("mb-4"):
+                            ui.label("Add Asset").classes("text-sm font-semibold mb-2")
+                            with ui.row().classes("items-end gap-4"):
+                                inp_asset = ui.input("Asset name").classes("w-48")
+                                inp_cat = ui.select(
+                                    options=_INVESTMENT_CATEGORIES,
+                                    label="Category",
+                                    value=_INVESTMENT_CATEGORIES[0],
+                                ).classes("w-40")
+                                inp_link = ui.input("Link (optional)").classes("w-64")
+
+                                def do_add_asset():
+                                    name = inp_asset.value.strip()
+                                    if not name:
+                                        ui.notify(
+                                            "Asset name is required", type="warning"
                                         )
-                                for abbr in month_abbrs:
-                                    with ui.element("th").classes(
-                                        "text-right px-2 py-1 border-b border-r"
-                                    ).style("min-width:72px"):
-                                        ui.label(abbr).classes(
-                                            "text-xs font-bold"
+                                        return
+                                    try:
+                                        inv.add_asset(
+                                            name, inp_cat.value, inp_link.value.strip()
                                         )
-                                ui.element("th").classes(
-                                    "px-2 py-1 border-b"
-                                ).style("min-width:40px")
+                                        inp_asset.value = ""
+                                        inp_link.value = ""
+                                        investment_content.refresh()
+                                        ui.notify(
+                                            f"Asset '{name}' added", type="positive"
+                                        )
+                                    except ValueError as exc:
+                                        ui.notify(str(exc), type="negative")
 
-                        # Body
-                        with ui.element("tbody"):
-                            for row_dict in inv.df.to_dicts():
-                                asset = row_dict["asset_name"]
-                                cat = row_dict["category"]
-                                link = row_dict.get("link", "")
+                                ui.button("Add", icon="add", on_click=do_add_asset)
 
-                                with ui.element("tr"):
-                                    # Asset name cell: clickable if link set, edit icon always shown
-                                    with ui.element("td").classes(
-                                        "px-2 py-1 border-r text-xs"
-                                    ):
-                                        with ui.row().classes("items-center gap-1 flex-nowrap"):
-                                            if link:
-                                                ui.link(asset, link, new_tab=True).classes(
-                                                    "text-xs text-blue-400 underline"
+                        # -- Holdings table ------------------------------------------
+                        if inv.df.height == 0:
+                            ui.label("No assets yet.").classes("text-gray-500")
+                        else:
+                            month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
+
+                            with (
+                                ui.element("table")
+                                .classes("w-full border-collapse text-sm")
+                                .style("border-spacing:0")
+                            ):
+                                # Header
+                                with ui.element("thead"):
+                                    with ui.element("tr"):
+                                        for label, min_w in [
+                                            ("Asset", "160px"),
+                                            ("Category", "110px"),
+                                        ]:
+                                            with (
+                                                ui.element("th")
+                                                .classes(
+                                                    "text-left px-2 py-1 border-b border-r"
                                                 )
-                                            else:
-                                                ui.label(asset).classes("text-xs")
-
-                                            def _make_edit_link(
-                                                _inv=inv, _asset=asset, _link=link
+                                                .style(f"min-width:{min_w}")
                                             ):
-                                                def open_dlg():
-                                                    with ui.dialog() as dlg, ui.card().classes("w-96"):
-                                                        ui.label(f"Link for {_asset}").classes(
-                                                            "text-sm font-semibold mb-2"
+                                                ui.label(label).classes(
+                                                    "text-xs font-bold"
+                                                )
+                                        for abbr in month_abbrs:
+                                            with (
+                                                ui.element("th")
+                                                .classes(
+                                                    "text-right px-2 py-1 border-b border-r"
+                                                )
+                                                .style("min-width:72px")
+                                            ):
+                                                ui.label(abbr).classes(
+                                                    "text-xs font-bold"
+                                                )
+                                        ui.element("th").classes(
+                                            "px-2 py-1 border-b"
+                                        ).style("min-width:40px")
+
+                                # Body
+                                with ui.element("tbody"):
+                                    for row_dict in inv.df.to_dicts():
+                                        asset = row_dict["asset_name"]
+                                        cat = row_dict["category"]
+                                        link = row_dict.get("link", "")
+
+                                        with ui.element("tr"):
+                                            # Asset name cell: clickable if link set, edit icon always shown
+                                            with ui.element("td").classes(
+                                                "px-2 py-1 border-r text-xs"
+                                            ):
+                                                with ui.row().classes(
+                                                    "items-center gap-1 flex-nowrap"
+                                                ):
+                                                    if link:
+                                                        ui.link(
+                                                            asset, link, new_tab=True
+                                                        ).classes(
+                                                            "text-xs text-blue-400 underline"
                                                         )
-                                                        inp_url = ui.input(
-                                                            "URL", value=_link
-                                                        ).classes("w-full")
+                                                    else:
+                                                        ui.label(asset).classes(
+                                                            "text-xs"
+                                                        )
 
-                                                        def save_link():
-                                                            _inv.set_link(
-                                                                _asset,
-                                                                inp_url.value.strip(),
-                                                            )
-                                                            dlg.close()
-                                                            networth_content.refresh()
+                                                    def _make_edit_link(
+                                                        _inv=inv,
+                                                        _asset=asset,
+                                                        _link=link,
+                                                    ):
+                                                        def open_dlg():
+                                                            with (
+                                                                ui.dialog() as dlg,
+                                                                ui.card().classes(
+                                                                    "w-96"
+                                                                ),
+                                                            ):
+                                                                ui.label(
+                                                                    f"Link for {_asset}"
+                                                                ).classes(
+                                                                    "text-sm font-semibold mb-2"
+                                                                )
+                                                                inp_url = ui.input(
+                                                                    "URL", value=_link
+                                                                ).classes("w-full")
 
-                                                        with ui.row().classes("mt-2"):
-                                                            ui.button("Save", on_click=save_link)
-                                                            ui.button("Cancel", on_click=dlg.close).props("flat")
-                                                    dlg.open()
-                                                return open_dlg
+                                                                def save_link():
+                                                                    _inv.set_link(
+                                                                        _asset,
+                                                                        inp_url.value.strip(),
+                                                                    )
+                                                                    dlg.close()
+                                                                    investment_content.refresh()
 
-                                            ui.button(
-                                                icon="link",
-                                                on_click=_make_edit_link(),
-                                            ).props("flat dense").classes("text-gray-400 ml-1")
-                                    with ui.element("td").classes(
-                                        "px-2 py-1 border-r text-xs"
-                                    ):
-                                        ui.label(cat)
+                                                                with ui.row().classes(
+                                                                    "mt-2"
+                                                                ):
+                                                                    ui.button(
+                                                                        "Save",
+                                                                        on_click=save_link,
+                                                                    )
+                                                                    ui.button(
+                                                                        "Cancel",
+                                                                        on_click=dlg.close,
+                                                                    ).props("flat")
+                                                            dlg.open()
 
-                                    for m in range(1, 13):
-                                        col = f"{m:02d}"
-                                        qty = row_dict[col]
+                                                        return open_dlg
 
-                                        def _make_qty_handler(
-                                            _inv=inv, _asset=asset, _m=m
-                                        ):
-                                            def handler(e):
-                                                try:
-                                                    v = (
-                                                        float(e.sender.value)
-                                                        if e.sender.value not in (None, "")
-                                                        else 0.0
+                                                    ui.button(
+                                                        icon="link",
+                                                        on_click=_make_edit_link(),
+                                                    ).props("flat dense").classes(
+                                                        "text-gray-400 ml-1"
                                                     )
-                                                except (ValueError, TypeError):
-                                                    return
-                                                _inv.set_quantity(
-                                                    asset_name=_asset,
-                                                    month=_m,
-                                                    quantity=v,
-                                                )
+                                            with ui.element("td").classes(
+                                                "px-2 py-1 border-r text-xs"
+                                            ):
+                                                ui.label(cat)
 
-                                            return handler
+                                            for m in range(1, 13):
+                                                col = f"{m:02d}"
+                                                qty = row_dict[col]
 
-                                        with ui.element("td").classes(
-                                            "px-1 py-0 border-r text-right"
-                                        ):
-                                            inp = ui.input(
-                                                value=str(qty) if qty != 0.0 else "",
-                                            ).classes("w-20").props(
-                                                'type="number" step="any" dense borderless'
-                                                ' input-class="text-right text-xs"'
-                                            )
-                                            inp.on("blur", _make_qty_handler())
+                                                def _make_qty_handler(
+                                                    _inv=inv, _asset=asset, _m=m
+                                                ):
+                                                    def handler(e):
+                                                        try:
+                                                            v = (
+                                                                float(e.sender.value)
+                                                                if e.sender.value
+                                                                not in (None, "")
+                                                                else 0.0
+                                                            )
+                                                        except (ValueError, TypeError):
+                                                            return
+                                                        _inv.set_quantity(
+                                                            asset_name=_asset,
+                                                            month=_m,
+                                                            quantity=v,
+                                                        )
 
-                                    # Delete button
-                                    with ui.element("td").classes(
-                                        "px-1 py-0 text-center"
-                                    ):
-                                        def _make_delete_handler(_inv=inv, _asset=asset):
-                                            def handler():
-                                                _inv.remove_asset(_asset)
-                                                networth_content.refresh()
-                                                ui.notify(
-                                                    f"Asset '{_asset}' removed",
-                                                    type="positive",
-                                                )
-                                            return handler
+                                                    return handler
 
-                                        ui.button(
-                                            icon="delete",
-                                            on_click=_make_delete_handler(),
-                                            color="negative",
-                                        ).props("flat dense")
+                                                with ui.element("td").classes(
+                                                    "px-1 py-0 border-r text-right"
+                                                ):
+                                                    inp = (
+                                                        ui.input(
+                                                            value=str(qty)
+                                                            if qty != 0.0
+                                                            else "",
+                                                        )
+                                                        .classes("w-20")
+                                                        .props(
+                                                            'type="number" step="any" dense borderless'
+                                                            ' input-class="text-right text-xs"'
+                                                        )
+                                                    )
+                                                    inp.on("blur", _make_qty_handler())
 
-            networth_content()
+                                            # Delete button
+                                            with ui.element("td").classes(
+                                                "px-1 py-0 text-center"
+                                            ):
 
-        # ===================== MAPPINGS TAB =================================
-        with ui.tab_panel("Mappings"):
+                                                def _make_delete_handler(
+                                                    _inv=inv, _asset=asset
+                                                ):
+                                                    def handler():
+                                                        _inv.remove_asset(_asset)
+                                                        investment_content.refresh()
+                                                        ui.notify(
+                                                            f"Asset '{_asset}' removed",
+                                                            type="positive",
+                                                        )
 
-            @ui.refreshable
-            def mappings_content():
-                mappings = get_all_mappings()
+                                                    return handler
 
-                with ui.row().classes("items-end gap-4 mb-4"):
-                    new_name = ui.input("Expense Name").classes("w-48")
-                    new_pri = ui.input("Primary Category").classes("w-48")
-                    new_sec = ui.input("Secondary Category").classes("w-48")
+                                                ui.button(
+                                                    icon="delete",
+                                                    on_click=_make_delete_handler(),
+                                                    color="negative",
+                                                ).props("flat dense")
 
-                    def do_add_mapping():
-                        if not new_name.value or not new_pri.value:
-                            ui.notify(
-                                "Name and primary category are required",
-                                type="warning",
-                            )
-                            return
-                        try:
-                            config_add_mapping(
-                                new_name.value, new_pri.value, new_sec.value or ""
-                            )
-                            ui.notify(
-                                f'Mapping added for "{new_name.value}"',
-                                type="positive",
-                            )
-                            mappings_content.refresh()
-                        except ValueError as exc:
-                            ui.notify(str(exc), type="negative")
-
-                    ui.button("Add Mapping", icon="add", on_click=do_add_mapping)
-
-                if mappings:
-                    mcols = [
-                        {"name": "expense_name", "label": "Expense Name", "field": "expense_name", "align": "left", "sortable": True},
-                        {"name": "primary_category", "label": "Primary", "field": "primary_category", "align": "left", "sortable": True},
-                        {"name": "secondary_category", "label": "Secondary", "field": "secondary_category", "align": "left", "sortable": True},
-                        {"name": "actions", "label": "", "field": "actions", "align": "center"},
-                    ]
-                    mrows = [
-                        {"id": i, "expense_name": name, **m}
-                        for i, (name, m) in enumerate(mappings.items())
-                    ]
-                    mt = ui.table(
-                        columns=mcols, rows=mrows, row_key="id"
-                    ).classes("w-full")
-                    mt.add_slot(
-                        "body-cell-actions",
-                        """
-                        <q-td :props="props">
-                            <q-btn flat dense icon="delete" color="negative"
-                                   @click="$parent.$emit('delete', props.row)" />
-                        </q-td>
-                        """,
-                    )
-
-                    def do_delete_mapping(e):
-                        config_remove_mapping(e.args["expense_name"])
-                        ui.notify("Mapping removed", type="positive")
-                        mappings_content.refresh()
-
-                    mt.on("delete", do_delete_mapping)
-                else:
-                    ui.label("No mappings configured yet.").classes("text-gray-500")
-
-            mappings_content()
+                    investment_content()
 
     # -- refresh when switching tabs ----------------------------------------
     def _on_tab_change(e):
-        if e.value == "Summary":
-            summary_content.refresh()
-        elif e.value == "Cashflow":
+        if e.value == "Cashflow":
             cashflow_content.refresh()
         elif e.value == "NetWorth":
-            networth_content.refresh()
+            investment_content.refresh()
 
     tabs.on_value_change(_on_tab_change)
 
     # -- initial data load ---------------------------------------------------
     load_data()
     refresh_table()
+    summary_content.refresh()
 
 
 def main():

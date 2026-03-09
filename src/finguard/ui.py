@@ -662,7 +662,12 @@ def index():
             df = df.filter(pl.col("expense_amount") >= st.filter_amount_min)
         if st.filter_amount_max is not None:
             df = df.filter(pl.col("expense_amount") <= st.filter_amount_max)
-        return _df_to_rows(df)
+        rows = _df_to_rows(df)
+        for row in rows:
+            d = row.get("expense_date", "")
+            if isinstance(d, str) and len(d) >= 10:
+                row["expense_date"] = int(d[8:10])
+        return rows
 
     def refresh_table():
         expenses_table.rows = _filtered_rows()
@@ -983,12 +988,22 @@ def index():
                                 "text-lg font-bold mt-6"
                             )
                             cum = pl.read_parquet(str(path))
+
+                            def _col_label(c: str) -> str:
+                                if "_" in c:
+                                    return c.replace("_", " ").title()
+                                # Convert "YYYY-MM" to month name
+                                parts = c.split("-")
+                                if len(parts) == 2 and parts[1].isdigit():
+                                    m = int(parts[1])
+                                    if 1 <= m <= 12:
+                                        return calendar.month_name[m]
+                                return c
+
                             cols = [
                                 {
                                     "name": c,
-                                    "label": c.replace("_", " ").title()
-                                    if "_" in c
-                                    else c,
+                                    "label": _col_label(c),
                                     "field": c,
                                     "align": "left" if i == 0 else "right",
                                     "sortable": True,

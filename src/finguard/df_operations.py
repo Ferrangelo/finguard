@@ -7,8 +7,10 @@ import polars as pl
 from finguard.config import get_mapping
 from finguard.paths import (
     CASHFLOW_FILENAME,
+    CREDITS_DEBTS_FILENAME,
     INVESTMENTS_FILENAME,
     INVESTMENTS_PRICES_FILENAME,
+    LIQUIDITY_FILENAME,
     PRIMARIES_FILENAME,
     SECONDARIES_FILENAME,
     get_monthly_parquet_path,
@@ -641,7 +643,7 @@ class InvestmentHoldings:
             raise ValueError(
                 f"quant_or_price must be 'quantity' or 'price', got '{quant_or_price}'"
             )
-            
+
     def set_quantity(self, asset_name: str, month: int, quantity: float) -> None:
         """Set the quantity for an asset in a given month."""
         self.set_quantity_or_price(
@@ -649,7 +651,7 @@ class InvestmentHoldings:
             month=month,
             quantity=quantity,
             quant_or_price="quantity",
-            )
+        )
 
     def set_price(self, asset_name: str, month: int, price: float) -> None:
         """Set the price for an asset in a given month."""
@@ -691,3 +693,188 @@ class InvestmentHoldings:
         """Write the holdings dataframe to disk."""
         self.save_df()
         self.save_df_prices()
+
+
+# ======================================================================
+# Liquidity
+# ======================================================================
+
+_LIQUIDITY_CATEGORIES = ["Bank/Broker account", "Cash", "Other"]
+
+_LIQ_META_COLS = ["asset_name", "category", "currency"]
+
+
+class Liquidity:
+    """Yearly liquidity dataframe.
+
+    Layout (wide format)::
+
+        asset_name      | category      | currency | 01    | 02    | … | 12
+        Main account    | Bank account  | E        | 5000  | 5200  |   | …
+        Savings account | Bank account  | E        | 10000 | 10000 |   | …
+
+    Each monthly cell contains the *value* (amount of money) held in
+    the given currency.
+
+    Parameters
+    ----------
+    year:
+        Calendar year (e.g. 2026).
+    """
+
+    def __init__(self, year: int):
+        self.year = year
+        self._path = get_year_summary_path(year, LIQUIDITY_FILENAME)
+
+        if self._path.exists():
+            self.df = pl.read_parquet(str(self._path))
+            if "currency" not in self.df.columns:
+                self.df = self.df.with_columns(pl.lit("E").alias("currency"))
+        else:
+            self.df = pl.DataFrame(
+                schema={
+                    "asset_name": pl.Utf8,
+                    "category": pl.Utf8,
+                    "currency": pl.Utf8,
+                    **{f"{m:02d}": pl.Float64 for m in range(1, 13)},
+                }
+            )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def add_asset(self, asset_name: str, category: str, currency: str = "E") -> None:
+        """Add a new liquidity asset row (all monthly values initialised to 0)."""
+        if category not in _LIQUIDITY_CATEGORIES:
+            raise ValueError(
+                f"'{category}' is not a valid category. "
+                f"Choose from: {_LIQUIDITY_CATEGORIES}"
+            )
+        if asset_name in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{asset_name}' already exists.")
+
+        new_row = pl.DataFrame(
+            {
+                "asset_name": [asset_name],
+                "category": [category],
+                "currency": [currency],
+                **{f"{m:02d}": [0.0] for m in range(1, 13)},
+            }
+        )
+        self.df = pl.concat([self.df, new_row], how="diagonal")
+        self.save()
+
+    def remove_asset(self, asset_name: str) -> None:
+        """Remove a liquidity asset row by name."""
+        self.df = self.df.filter(pl.col("asset_name") != asset_name)
+        self.save()
+
+    def set_value(self, asset_name: str, month: int, value: float) -> None:
+        """Set the value for an asset in a given month."""
+        if not 1 <= month <= 12:
+            raise ValueError(f"month must be between 1 and 12, got {month}")
+        if asset_name not in self.df["asset_name"].to_list():
+            raise ValueError(f"Asset '{asset_name}' not found.")
+
+        col = f"{month:02d}"
+        mask = self.df["asset_name"] == asset_name
+        self.df = self.df.with_columns(
+            pl.when(mask).then(pl.lit(value)).otherwise(pl.col(col)).alias(col)
+        )
+        self.save()
+
+    def save(self) -> None:
+        """Write the liquidity dataframe to disk."""
+        self.df.write_parquet(str(self._path))
+
+
+# ======================================================================
+# CreditsDebts
+# ======================================================================
+
+
+class CreditsDebts:
+    """Yearly credits & debts dataframe.
+
+    Layout (wide format)::
+
+        name            | currency | 01    | 02    | … | 12
+        Loan to friend  | E        | 500   | 500   |   | 0
+        Car loan        | E        | -8000 | -7500 |   | …
+
+    Each monthly cell contains the outstanding amount.  Positive values
+    represent credits (money owed to the user) and negative values
+    represent debts (money the user owes).
+
+    Parameters
+    ----------
+    year:
+        Calendar year (e.g. 2026).
+    """
+
+    def __init__(self, year: int):
+        self.year = year
+        self._path = get_year_summary_path(year, CREDITS_DEBTS_FILENAME)
+
+        if self._path.exists():
+            self.df = pl.read_parquet(str(self._path))
+            if "currency" not in self.df.columns:
+                self.df = self.df.with_columns(pl.lit("E").alias("currency"))
+            # Migration: drop legacy "type" column if present
+            if "type" in self.df.columns:
+                self.df = self.df.drop("type")
+        else:
+            self.df = pl.DataFrame(
+                schema={
+                    "name": pl.Utf8,
+                    "currency": pl.Utf8,
+                    **{f"{m:02d}": pl.Float64 for m in range(1, 13)},
+                }
+            )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def add_entry(self, name: str, currency: str = "E") -> None:
+        """Add a new credit/debt row (all monthly values initialised to 0).
+
+        Positive values entered later represent credits; negative values
+        represent debts.
+        """
+        if name in self.df["name"].to_list():
+            raise ValueError(f"Entry '{name}' already exists.")
+
+        new_row = pl.DataFrame(
+            {
+                "name": [name],
+                "currency": [currency],
+                **{f"{m:02d}": [0.0] for m in range(1, 13)},
+            }
+        )
+        self.df = pl.concat([self.df, new_row], how="diagonal")
+        self.save()
+
+    def remove_entry(self, name: str) -> None:
+        """Remove a credit/debt row by name."""
+        self.df = self.df.filter(pl.col("name") != name)
+        self.save()
+
+    def set_value(self, name: str, month: int, value: float) -> None:
+        """Set the outstanding amount for an entry in a given month."""
+        if not 1 <= month <= 12:
+            raise ValueError(f"month must be between 1 and 12, got {month}")
+        if name not in self.df["name"].to_list():
+            raise ValueError(f"Entry '{name}' not found.")
+
+        col = f"{month:02d}"
+        mask = self.df["name"] == name
+        self.df = self.df.with_columns(
+            pl.when(mask).then(pl.lit(value)).otherwise(pl.col(col)).alias(col)
+        )
+        self.save()
+
+    def save(self) -> None:
+        """Write the credits/debts dataframe to disk."""
+        self.df.write_parquet(str(self._path))

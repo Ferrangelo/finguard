@@ -1353,10 +1353,18 @@ def index():
                         month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
                         mcols = [f"{m:02d}" for m in range(1, 13)]
 
-                        # Compute investment totals per month
+                        # Compute investment totals per category per month
                         inv_val = inv.df_value
+                        inv_by_cat: dict[str, list[float]] = {}
+                        for cat in _INVESTMENT_CATEGORIES:
+                            cat_df = inv_val.filter(pl.col("category") == cat)
+                            inv_by_cat[cat] = [
+                                cat_df[c].sum() if cat_df.height else 0.0
+                                for c in mcols
+                            ]
                         inv_totals = [
-                            inv_val[c].sum() if inv_val.height else 0.0 for c in mcols
+                            sum(inv_by_cat[cat][i] for cat in _INVESTMENT_CATEGORIES)
+                            for i in range(12)
                         ]
 
                         # Compute liquidity totals per month
@@ -1409,7 +1417,7 @@ def index():
                         )
 
                         rows_data = [
-                            ("Investments", inv_totals),
+                            *[(cat, inv_by_cat[cat]) for cat in _INVESTMENT_CATEGORIES],
                             ("Liquidity", liq_totals),
                             ("Credits/Debts", cd_totals),
                             ("Net Worth", net_totals),

@@ -6,6 +6,7 @@ from nicegui import ui
 
 from finguard.plots import (
     category_expenses_over_months,
+    cumulative_expenses_pie,
     monthly_expenses_comparison,
     monthly_expenses_pie,
 )
@@ -55,6 +56,15 @@ def render_category_expenses_chart(
     opts = category_expenses_over_months(year, categories, kind)
     if opts is None:
         ui.label("No expense data available.").classes("text-gray-500")
+        return
+    ui.echart(opts).classes("w-full").style("height: 420px")
+
+
+def render_cumulative_expenses_pie(year: int, kind: str = "primary") -> None:
+    """Render a pie chart of cumulative yearly expenses by category."""
+    opts = cumulative_expenses_pie(year, kind)
+    if opts is None:
+        ui.label("No cumulative data available.").classes("text-gray-500")
         return
     ui.echart(opts).classes("w-full").style("height: 420px")
 

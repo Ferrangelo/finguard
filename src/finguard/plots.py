@@ -182,6 +182,53 @@ def category_expenses_over_months(
     }
 
 
+def cumulative_expenses_pie(
+    year: int,
+    kind: str = "primary",
+) -> dict | None:
+    """Return ECharts option dict for a pie chart of cumulative yearly expenses."""
+    filename = PRIMARIES_FILENAME if kind == "primary" else SECONDARIES_FILENAME
+    cat_col = f"{kind}_category"
+    path = get_year_summary_path(year, filename)
+
+    if not path.exists():
+        return None
+
+    df = pl.read_parquet(str(path))
+    df = df.filter(pl.col(cat_col) != "Total")
+    if df.height == 0:
+        return None
+
+    month_cols = [c for c in df.columns if "-" in c and c.split("-")[1].isdigit()]
+    if not month_cols:
+        return None
+
+    categories = df[cat_col].to_list()
+    totals = [sum(df[c][i] for c in month_cols) for i in range(df.height)]
+    data = [
+        {"name": cat, "value": round(val)}
+        for cat, val in zip(categories, totals)
+        if cat and val > 0
+    ]
+    if not data:
+        return None
+
+    return {
+        "tooltip": {"trigger": "item"},
+        "legend": {"orient": "vertical", "left": "left", "textStyle": {"color": "#fff"}},
+        "series": [
+            {
+                "type": "pie",
+                "radius": "70%",
+                "data": data,
+                "label": {"color": "#fff", "fontSize": 16},
+                "labelLine": {"lineStyle": {"color": "#fff"}},
+                "itemStyle": {"borderColor": "#222", "borderWidth": 1},
+            }
+        ],
+    }
+
+
 def monthly_expenses_pie(
     st_de, kind: str = "primary"
 ) -> dict | None:

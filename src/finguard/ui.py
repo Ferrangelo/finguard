@@ -40,6 +40,7 @@ from finguard.paths import (
 )
 from finguard.ui_plots import (
     render_category_expenses_chart,
+    render_cumulative_expenses_pie,
     render_monthly_expenses_chart,
     render_monthly_expenses_pie,
 )
@@ -1019,9 +1020,13 @@ def index():
                                 }
                                 for i, c in enumerate(cum.columns)
                             ]
-                            ui.table(
-                                columns=cols, rows=_df_to_rows(cum), row_key="id"
-                            ).classes("w-full")
+                            with ui.row().classes("w-full items-start gap-8"):
+                                with ui.column().classes("flex-1"):
+                                    ui.table(
+                                        columns=cols, rows=_df_to_rows(cum), row_key="id"
+                                    ).classes("w-full")
+                                with ui.column().classes("flex-1"):
+                                    render_cumulative_expenses_pie(st.year, kind)
 
                             # -- bar chart: compare up to 3 months --
                             ui.label("Monthly Comparison Chart").classes(

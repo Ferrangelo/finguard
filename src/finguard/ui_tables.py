@@ -27,7 +27,7 @@ def _build_investment_table(
     """
     with (
         ui.element("table")
-        .classes("w-full border-collapse text-sm")
+        .classes("w-full border-collapse text-base")
         .style("border-spacing:0")
     ):
         # Header
@@ -39,14 +39,14 @@ def _build_investment_table(
                         .classes("text-left px-2 py-1 border-b border-r")
                         .style(f"min-width:{min_w}")
                     ):
-                        ui.label(label).classes("text-xs font-bold")
+                        ui.label(label).classes("text-base font-bold")
                 for abbr in month_abbrs:
                     with (
                         ui.element("th")
                         .classes("text-right px-2 py-1 border-b border-r")
                         .style("min-width:72px")
                     ):
-                        ui.label(abbr).classes("text-xs font-bold")
+                        ui.label(abbr).classes("text-base font-bold")
                 if show_delete:
                     ui.element("th").classes("px-2 py-1 border-b").style(
                         "min-width:40px"
@@ -61,14 +61,14 @@ def _build_investment_table(
 
                 with ui.element("tr"):
                     # Asset name cell
-                    with ui.element("td").classes("px-2 py-1 border-r text-xs"):
+                    with ui.element("td").classes("px-2 py-1 border-r text-base"):
                         with ui.row().classes("items-center gap-1 flex-nowrap"):
                             if link:
                                 ui.link(asset, link, new_tab=True).classes(
-                                    "text-xs text-blue-400 underline"
+                                    "text-base text-blue-400 underline"
                                 )
                             else:
-                                ui.label(asset).classes("text-xs")
+                                ui.label(asset).classes("text-base")
 
                             if editable:
 
@@ -148,7 +148,7 @@ def _build_investment_table(
                                 ).props("flat dense").classes("text-gray-400 ml-1")
 
                     # Category cell
-                    with ui.element("td").classes("px-2 py-1 border-r text-xs"):
+                    with ui.element("td").classes("px-2 py-1 border-r text-base"):
                         ui.label(cat)
 
                     # Month cells
@@ -194,14 +194,14 @@ def _build_investment_table(
                                     .classes("w-20")
                                     .props(
                                         'dense borderless'
-                                        ' input-class="text-right text-xs"'
+                                        ' input-class="text-right text-base"'
                                     )
                                 )
                                 inp.on("blur", _make_cell_handler())
                             else:
                                 # Read-only display
                                 txt = f"{val:,.2f}" if val and val != 0.0 else ""
-                                ui.label(txt).classes("text-xs")
+                                ui.label(txt).classes("text-base")
 
                     # Delete button
                     if show_delete:
@@ -231,7 +231,7 @@ def _build_investment_table(
             if not editable:
                 with ui.element("tr").classes("border-t-2"):
                     with ui.element("td").classes(
-                        "px-2 py-1 border-r text-xs font-bold"
+                        "px-2 py-1 border-r text-base font-bold"
                     ):
                         ui.label("Total")
                     with ui.element("td").classes("px-2 py-1 border-r"):
@@ -241,7 +241,7 @@ def _build_investment_table(
                         total = df[col].sum()
                         with ui.element("td").classes("px-1 py-0 border-r text-right"):
                             txt = f"{total:,.2f}" if total else ""
-                            ui.label(txt).classes("text-xs font-bold")
+                            ui.label(txt).classes("text-base font-bold")
 
 
 def _build_simple_value_table(
@@ -264,7 +264,7 @@ def _build_simple_value_table(
     """
     with (
         ui.element("table")
-        .classes("w-full border-collapse text-sm")
+        .classes("w-full border-collapse text-base")
         .style("border-spacing:0")
     ):
         # Header
@@ -280,14 +280,14 @@ def _build_simple_value_table(
                         .classes("text-left px-2 py-1 border-b border-r")
                         .style(f"min-width:{min_w}")
                     ):
-                        ui.label(label).classes("text-xs font-bold")
+                        ui.label(label).classes("text-base font-bold")
                 for abbr in month_abbrs:
                     with (
                         ui.element("th")
                         .classes("text-right px-2 py-1 border-b border-r")
                         .style("min-width:72px")
                     ):
-                        ui.label(abbr).classes("text-xs font-bold")
+                        ui.label(abbr).classes("text-base font-bold")
                 ui.element("th").classes("px-2 py-1 border-b").style("min-width:40px")
 
         # Body
@@ -297,7 +297,7 @@ def _build_simple_value_table(
                 row_cur = row_dict.get("currency", "E")
 
                 with ui.element("tr"):
-                    with ui.element("td").classes("px-2 py-1 border-r text-xs"):
+                    with ui.element("td").classes("px-2 py-1 border-r text-base"):
                         with ui.row().classes("items-center gap-1 flex-nowrap"):
                             ui.label(row_name)
 
@@ -380,10 +380,10 @@ def _build_simple_value_table(
                                     on_click=_make_edit_name(),
                                 ).props("flat dense").classes("text-gray-400 ml-1")
                     if type_col is not None:
-                        with ui.element("td").classes("px-2 py-1 border-r text-xs"):
+                        with ui.element("td").classes("px-2 py-1 border-r text-base"):
                             ui.label(row_dict[type_col])
                     with ui.element("td").classes(
-                        "px-2 py-1 border-r text-xs text-center"
+                        "px-2 py-1 border-r text-base text-center"
                     ):
                         ui.label(row_cur)
 
@@ -424,7 +424,7 @@ def _build_simple_value_table(
                                 .classes("w-20")
                                 .props(
                                     'dense borderless'
-                                    ' input-class="text-right text-xs"'
+                                    ' input-class="text-right text-base"'
                                 )
                             )
                             inp.on("blur", _make_handler())
@@ -456,7 +456,7 @@ def _build_simple_value_table(
 
             # Totals row
             with ui.element("tr").classes("border-t-2"):
-                with ui.element("td").classes("px-2 py-1 border-r text-xs font-bold"):
+                with ui.element("td").classes("px-2 py-1 border-r text-base font-bold"):
                     ui.label("Total")
                 if type_col is not None:
                     with ui.element("td").classes("px-2 py-1 border-r"):
@@ -468,4 +468,4 @@ def _build_simple_value_table(
                     total = df[col].sum()
                     with ui.element("td").classes("px-1 py-0 border-r text-right"):
                         txt = f"{total:,.2f}" if total else ""
-                        ui.label(txt).classes("text-xs font-bold")
+                        ui.label(txt).classes("text-base font-bold")

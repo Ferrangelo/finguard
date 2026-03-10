@@ -34,7 +34,7 @@ def build_cashflow_tab(st, _refreshables):
 
         with (
             ui.element("table")
-            .classes("w-full border-collapse text-sm")
+            .classes("w-full border-collapse text-lg")
             .style("border-spacing: 0")
         ):
             # Header
@@ -46,10 +46,10 @@ def build_cashflow_tab(st, _refreshables):
                     for abbr in month_abbrs:
                         with (
                             ui.element("th")
-                            .classes("text-right px-2 py-1 border-b border-r")
+                            .classes("text-center px-2 py-1 border-b border-r")
                             .style("min-width:80px")
                         ):
-                            ui.label(abbr).classes("text-xs font-bold")
+                            ui.label(abbr).classes("text-lg font-bold")
 
             # Body
             with ui.element("tbody"):
@@ -67,7 +67,7 @@ def build_cashflow_tab(st, _refreshables):
                         with ui.element("td").classes(
                             f"px-2 py-1 border-r {weight}"
                         ):
-                            ui.label(cat).classes("text-xs")
+                            ui.label(cat).classes("text-lg")
 
                         # Month cells
                         for m in range(1, 13):
@@ -75,7 +75,7 @@ def build_cashflow_tab(st, _refreshables):
                             val = cf._get_value(cat, col)
 
                             with ui.element("td").classes(
-                                "px-1 py-0 border-r text-right"
+                                "px-1 py-0 border-r text-center"
                             ):
                                 if is_derived:
                                     # Read-only derived value
@@ -98,7 +98,7 @@ def build_cashflow_tab(st, _refreshables):
                                         color = ""
 
                                     ui.label(txt).classes(
-                                        f"text-xs font-bold {color}"
+                                        f"text-base font-bold {color}"
                                     )
                                 else:
                                     # Editable income input
@@ -127,7 +127,7 @@ def build_cashflow_tab(st, _refreshables):
                                         value=str(val) if val != 0.0 else "",
                                     ).classes("w-20").props(
                                         "dense borderless"
-                                        ' input-class="text-right text-xs"'
+                                        ' input-class="text-right text-base"'
                                     )
                                     inp.on("blur", _make_handler())
 

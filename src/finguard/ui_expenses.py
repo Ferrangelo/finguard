@@ -232,9 +232,9 @@ def build_expenses_tab(st, _refreshables):
     # ========================================================================
 
     with ui.tabs().classes("w-full") as exp_subtabs:
-        ui.tab("Detailed expenses").props("no-caps")
-        ui.tab("Summary").props("no-caps")
-        ui.tab("Mappings expense-categories").props("no-caps")
+        ui.tab("Detailed expenses").props("no-caps").classes("text-xl")
+        ui.tab("Summary").props("no-caps").classes("text-xl")
+        ui.tab("Mappings expense-categories").props("no-caps").classes("text-xl")
 
     with ui.tab_panels(exp_subtabs, value="Detailed expenses").classes("w-full"):
         with ui.tab_panel("Detailed expenses"):
@@ -274,7 +274,7 @@ def build_expenses_tab(st, _refreshables):
                 rows=[],
                 row_key="id",
                 pagination={"rowsPerPage": 25},
-            ).classes("w-full")
+            ).classes("w-full text-lg")
 
             expenses_table.add_slot(
                 "body-cell-actions",
@@ -325,7 +325,7 @@ def build_expenses_tab(st, _refreshables):
                         with ui.column().classes("flex-1"):
                             ui.table(
                                 columns=cols, rows=_df_to_rows(monthly), row_key="id"
-                            ).classes("w-full")
+                            ).classes("w-full text-lg")
                         with ui.column().classes("flex-1"):
                             render_monthly_expenses_pie(st.de, kind)
                 else:
@@ -369,7 +369,7 @@ def build_expenses_tab(st, _refreshables):
                         with ui.column().classes("flex-1"):
                             ui.table(
                                 columns=cols, rows=_df_to_rows(cum), row_key="id"
-                            ).classes("w-full")
+                            ).classes("w-full text-lg")
                         with ui.column().classes("flex-1"):
                             render_cumulative_expenses_pie(st.year, kind)
 
@@ -538,7 +538,7 @@ def build_expenses_tab(st, _refreshables):
                     ]
                     mt = ui.table(
                         columns=mcols, rows=mrows, row_key="id"
-                    ).classes("w-full")
+                    ).classes("w-full text-lg")
                     mt.add_slot(
                         "body-cell-actions",
                         """

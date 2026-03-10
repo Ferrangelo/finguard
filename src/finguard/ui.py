@@ -93,11 +93,11 @@ def index():
 
     # -- tabs ----------------------------------------------------------------
     with ui.tabs().classes("w-full") as tabs:
-        ui.tab("Expenses").props("no-caps")
-        # ui.tab("Summary").props("no-caps")
-        ui.tab("Cashflow").props("no-caps")
-        ui.tab("NetWorth").props("no-caps")
-        # ui.tab("Mappings").props("no-caps")
+        ui.tab("Expenses").props("no-caps").classes("text-xl")
+        # ui.tab("Summary").props("no-caps").classes("text-xl")
+        ui.tab("Cashflow").props("no-caps").classes("text-xl")
+        ui.tab("NetWorth").props("no-caps").classes("text-xl")
+        # ui.tab("Mappings").props("no-caps").classes("text-xl")
 
     with ui.tab_panels(tabs, value="Expenses").classes("w-full"):
         # ===================== EXPENSES TAB =================================

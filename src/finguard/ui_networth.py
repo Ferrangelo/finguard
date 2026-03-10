@@ -27,10 +27,10 @@ def build_networth_tab(st, _refreshables):
 
     # Sub-tabs for NetWorth
     with ui.tabs().classes("w-full") as networth_tabs:
-        ui.tab("Investments").props("no-caps")
-        ui.tab("Liquidity").props("no-caps")
-        ui.tab("Credits/Debts").props("no-caps")
-        ui.tab("Total NetWorth").props("no-caps")
+        ui.tab("Investments").props("no-caps").classes("text-xl")
+        ui.tab("Liquidity").props("no-caps").classes("text-xl")
+        ui.tab("Credits/Debts").props("no-caps").classes("text-xl")
+        ui.tab("Total NetWorth").props("no-caps").classes("text-xl")
 
     with ui.tab_panels(networth_tabs, value="Investments").classes("w-full"):
         with ui.tab_panel("Liquidity"):
@@ -43,7 +43,7 @@ def build_networth_tab(st, _refreshables):
                 # -- Add asset form --
                 with ui.card().classes("mb-4"):
                     ui.label("Add Liquidity Asset").classes(
-                        "text-sm font-semibold mb-2"
+                        "text-base font-semibold mb-2"
                     )
                     with ui.row().classes("items-end gap-4"):
                         inp_name = ui.input("Asset name").classes("w-48")
@@ -84,7 +84,7 @@ def build_networth_tab(st, _refreshables):
 
                 if liq.df.height == 0:
                     ui.label("No liquidity assets yet.").classes(
-                        "text-gray-500"
+                        "text-base text-gray-500"
                     )
                 else:
                     _build_simple_value_table(
@@ -116,11 +116,11 @@ def build_networth_tab(st, _refreshables):
                 # -- Add entry form --
                 with ui.card().classes("mb-4"):
                     ui.label("Add Credit / Debt").classes(
-                        "text-sm font-semibold mb-2"
+                        "text-base font-semibold mb-2"
                     )
                     ui.label(
                         "Positive values = credit, negative values = debt"
-                    ).classes("text-xs text-gray-500 mb-1")
+                    ).classes("text-base text-gray-500 mb-1")
                     with ui.row().classes("items-end gap-4"):
                         inp_name = ui.input("Name").classes("w-48")
                         inp_cur = ui.input("Currency", value="E").classes(
@@ -152,7 +152,7 @@ def build_networth_tab(st, _refreshables):
 
                 if cd.df.height == 0:
                     ui.label("No credits or debts yet.").classes(
-                        "text-gray-500"
+                        "text-base text-gray-500"
                     )
                 else:
                     _build_simple_value_table(
@@ -256,7 +256,7 @@ def build_networth_tab(st, _refreshables):
 
                 with (
                     ui.element("table")
-                    .classes("w-full border-collapse text-sm")
+                    .classes("w-full border-collapse text-base")
                     .style("border-spacing:0")
                 ):
                     with ui.element("thead"):
@@ -268,7 +268,7 @@ def build_networth_tab(st, _refreshables):
                                 )
                                 .style("min-width:160px")
                             ):
-                                ui.label("").classes("text-xs font-bold")
+                                ui.label("").classes("text-base font-bold")
                             for abbr in month_abbrs:
                                 with (
                                     ui.element("th")
@@ -277,7 +277,7 @@ def build_networth_tab(st, _refreshables):
                                     )
                                     .style("min-width:72px")
                                 ):
-                                    ui.label(abbr).classes("text-xs font-bold")
+                                    ui.label(abbr).classes("text-base font-bold")
 
                     with ui.element("tbody"):
                         for label, values in rows_data:
@@ -287,7 +287,7 @@ def build_networth_tab(st, _refreshables):
                             weight = "font-bold" if is_total else ""
                             with ui.element("tr").classes(border_top):
                                 with ui.element("td").classes(
-                                    f"px-2 py-1 border-r text-xs {weight}"
+                                    f"px-2 py-1 border-r text-base {weight}"
                                 ):
                                     ui.label(label)
                                 for v in values:
@@ -301,7 +301,7 @@ def build_networth_tab(st, _refreshables):
                                         else:
                                             txt = f"{v:,.2f}"
                                         ui.label(txt).classes(
-                                            f"text-xs {weight}"
+                                            f"text-base {weight}"
                                         )
 
                 with ui.row().classes("w-full gap-4 mt-6"):
@@ -321,7 +321,7 @@ def build_networth_tab(st, _refreshables):
 
                 # -- Add asset form ------------------------------------------
                 with ui.card().classes("mb-4"):
-                    ui.label("Add Asset").classes("text-sm font-semibold mb-2")
+                    ui.label("Add Asset").classes("text-base font-semibold mb-2")
                     with ui.row().classes("items-end gap-4"):
                         inp_asset = ui.input("Asset name").classes("w-48")
                         inp_cat = ui.select(
@@ -354,7 +354,7 @@ def build_networth_tab(st, _refreshables):
                         ui.button("Add", icon="add", on_click=do_add_asset)
 
                 if inv.df.height == 0:
-                    ui.label("No assets yet.").classes("text-gray-500")
+                    ui.label("No assets yet.").classes("text-base text-gray-500")
                 else:
                     month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
 
@@ -376,9 +376,9 @@ def build_networth_tab(st, _refreshables):
 
                     # -- Sub-tabs: Holdings / Prices / Value -----------------
                     with ui.tabs().classes("w-full") as inv_subtabs:
-                        ui.tab("Holdings").props("no-caps")
-                        ui.tab("Prices").props("no-caps")
-                        ui.tab("Value").props("no-caps")
+                        ui.tab("Holdings").props("no-caps").classes("text-xl")
+                        ui.tab("Prices").props("no-caps").classes("text-xl")
+                        ui.tab("Value").props("no-caps").classes("text-xl")
 
                     with ui.tab_panels(inv_subtabs, value="Holdings").classes(
                         "w-full"

@@ -63,7 +63,7 @@ uv pip install .
 
 ### Start the web UI
 
-First activate the python environment on which finguard was installed and then
+First activate the python environment on which finguard was installed and then run
 
 ```bash
 finguard-ui              # starts on http://localhost:8080

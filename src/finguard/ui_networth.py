@@ -15,6 +15,7 @@ from finguard.df_operations import (
     Liquidity,
 )
 from finguard.ui_tables import _build_investment_table, _build_simple_value_table
+from finguard.ui_plots import render_networth_allocation_pie, render_networth_evolution_line
 
 
 def build_networth_tab(st, _refreshables):
@@ -302,6 +303,12 @@ def build_networth_tab(st, _refreshables):
                                         ui.label(txt).classes(
                                             f"text-xs {weight}"
                                         )
+
+                with ui.row().classes("w-full gap-4 mt-6"):
+                    with ui.column().classes("flex-1"):
+                        render_networth_allocation_pie(st.year, st.month)
+                    with ui.column().classes("flex-1"):
+                        render_networth_evolution_line(st.year)
 
             _refreshables["total_networth_content"] = _total_networth_content
             _total_networth_content()

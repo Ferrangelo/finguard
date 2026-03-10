@@ -6,7 +6,14 @@ import calendar
 
 import polars as pl
 
-from finguard.df_operations import Cashflow, _INCOME_CATEGORIES
+from finguard.df_operations import (
+    Cashflow,
+    CreditsDebts,
+    InvestmentHoldings,
+    Liquidity,
+    _INCOME_CATEGORIES,
+    _INVESTMENT_CATEGORIES,
+)
 from finguard.paths import PRIMARIES_FILENAME, SECONDARIES_FILENAME, get_year_summary_path
 
 
@@ -320,6 +327,149 @@ def income_pie_chart(year: int) -> dict | None:
                 "itemStyle": {"borderColor": "#222", "borderWidth": 1},
             }
         ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Net Worth charts
+# ---------------------------------------------------------------------------
+
+def networth_allocation_pie(year: int, month: int) -> dict | None:
+    """Return ECharts option dict for a pie chart of net worth by asset type.
+
+    Slices: each investment category, Liquidity, and Credits/Debts.
+
+    Parameters
+    ----------
+    year:
+        Calendar year.
+    month:
+        Month number (1-12) to display.
+    """
+    inv = InvestmentHoldings(year=year)
+    liq = Liquidity(year=year)
+    cd = CreditsDebts(year=year)
+    col = f"{month:02d}"
+
+    data = []
+    for cat in _INVESTMENT_CATEGORIES:
+        cat_df = inv.df_value.filter(pl.col("category") == cat)
+        val = cat_df[col].sum() if cat_df.height else 0.0
+        if val > 0:
+            data.append({"name": cat, "value": round(val, 2)})
+
+    liq_val = liq.df[col].sum() if liq.df.height else 0.0
+    if liq_val > 0:
+        data.append({"name": "Liquidity", "value": round(liq_val, 2)})
+
+    cd_val = cd.df[col].sum() if cd.df.height else 0.0
+    if cd_val > 0:
+        data.append({"name": "Credits", "value": round(cd_val, 2)})
+    elif cd_val < 0:
+        data.append({"name": "Debts", "value": round(abs(cd_val), 2)})
+
+    if not data:
+        return None
+
+    month_label = calendar.month_name[month]
+    return {
+        "title": {
+            "text": f"Asset allocation — {month_label} {year}",
+            "left": "center",
+            "top": 10,
+            "textStyle": {"color": "#fff", "fontSize": 20},
+        },
+        "tooltip": {"trigger": "item"},
+        "legend": {"orient": "vertical", "left": "left", "textStyle": {"color": "#fff"}},
+        "series": [
+            {
+                "type": "pie",
+                "radius": "70%",
+                "data": data,
+                "label": {"color": "#fff", "fontSize": 16},
+                "labelLine": {"lineStyle": {"color": "#fff"}},
+                "itemStyle": {"borderColor": "#222", "borderWidth": 1},
+            }
+        ],
+    }
+
+
+def networth_evolution_line(year: int) -> dict | None:
+    """Return ECharts option dict for a stacked area chart of net worth over months.
+
+    Shows one area per component (each investment category, Liquidity,
+    Credits/Debts) and a bold line for total Net Worth.
+    """
+    inv = InvestmentHoldings(year=year)
+    liq = Liquidity(year=year)
+    cd = CreditsDebts(year=year)
+    mcols = [f"{m:02d}" for m in range(1, 13)]
+    months = [calendar.month_abbr[m] for m in range(1, 13)]
+
+    # Build per-component monthly series
+    components: list[tuple[str, list[float]]] = []
+    for cat in _INVESTMENT_CATEGORIES:
+        cat_df = inv.df_value.filter(pl.col("category") == cat)
+        vals = [round(cat_df[c].sum(), 2) if cat_df.height else 0.0 for c in mcols]
+        components.append((cat, vals))
+
+    liq_vals = [round(liq.df[c].sum(), 2) if liq.df.height else 0.0 for c in mcols]
+    components.append(("Liquidity", liq_vals))
+
+    cd_vals = [round(cd.df[c].sum(), 2) if cd.df.height else 0.0 for c in mcols]
+    components.append(("Credits/Debts", cd_vals))
+
+    net = [sum(comp[1][i] for comp in components) for i in range(12)]
+    if all(v == 0 for v in net):
+        return None
+
+    _COLORS = ["#5470c6", "#91cc75", "#fac858", "#73c0de", "#ee6666"]
+
+    series = []
+    for idx, (name, vals) in enumerate(components):
+        series.append({
+            "name": name,
+            "type": "line",
+            "stack": "nw",
+            "areaStyle": {"opacity": 0.35},
+            "data": vals,
+            "symbol": "none",
+            "lineStyle": {"width": 1, "color": _COLORS[idx % len(_COLORS)]},
+            "itemStyle": {"color": _COLORS[idx % len(_COLORS)]},
+        })
+    series.append({
+        "name": "Net Worth",
+        "type": "line",
+        "data": [round(v, 2) for v in net],
+        "symbol": "circle",
+        "symbolSize": 6,
+        "lineStyle": {"width": 3, "color": "#fff"},
+        "itemStyle": {"color": "#fff"},
+    })
+
+    return {
+        "title": {
+            "text": f"Net Worth — {year}",
+            "left": "center",
+            "top": 10,
+            "textStyle": {"color": "#fff", "fontSize": 20},
+        },
+        "tooltip": {"trigger": "axis"},
+        "legend": {
+            "data": [s["name"] for s in series],
+            "textStyle": {"color": "#fff"},
+        },
+        "xAxis": {
+            "type": "category",
+            "data": months,
+            **_CHART_AXIS_STYLE,
+        },
+        "yAxis": {
+            "type": "value",
+            **_CHART_AXIS_STYLE,
+            "splitLine": {"lineStyle": {"color": "#555555"}},
+        },
+        "series": series,
     }
 
 

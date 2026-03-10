@@ -9,6 +9,8 @@ from finguard.plots import (
     cumulative_expenses_pie,
     monthly_expenses_comparison,
     monthly_expenses_pie,
+    networth_allocation_pie,
+    networth_evolution_line,
 )
 
 
@@ -76,3 +78,21 @@ def render_monthly_expenses_pie(st_de, kind: str = "primary") -> None:
         ui.label("No expense data available for this month.").classes("text-gray-500")
         return
     ui.echart(opts).classes("w-full").style("height: 320px")
+
+
+def render_networth_allocation_pie(year: int, month: int) -> None:
+    """Render a pie chart of net worth by asset type."""
+    opts = networth_allocation_pie(year, month)
+    if opts is None:
+        ui.label("No net worth data available.").classes("text-gray-500")
+        return
+    ui.echart(opts).classes("w-full").style("height: 420px")
+
+
+def render_networth_evolution_line(year: int) -> None:
+    """Render a stacked area chart of net worth evolution over months."""
+    opts = networth_evolution_line(year)
+    if opts is None:
+        ui.label("No net worth data available.").classes("text-gray-500")
+        return
+    ui.echart(opts).classes("w-full").style("height: 420px")

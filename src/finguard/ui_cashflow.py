@@ -10,6 +10,7 @@ from finguard.df_operations import (
     _INCOME_CATEGORIES,
     Cashflow,
 )
+from finguard.plots import cashflow_bar_chart, income_pie_chart
 from finguard.ui_helpers import _safe_eval_expr
 
 
@@ -129,6 +130,22 @@ def build_cashflow_tab(st, _refreshables):
                                         ' input-class="text-right text-xs"'
                                     )
                                     inp.on("blur", _make_handler())
+
+        # -- Charts below the table ------------------------------------------
+        with ui.row().classes("w-full gap-4 mt-4"):
+            with ui.card().classes("flex-1"):
+                bar_opts = cashflow_bar_chart(st.year)
+                if bar_opts:
+                    ui.echart(bar_opts).classes("w-full h-80")
+                else:
+                    ui.label("No cashflow data to chart.").classes("text-sm text-gray-400")
+
+            with ui.card().classes("flex-1"):
+                pie_opts = income_pie_chart(st.year)
+                if pie_opts:
+                    ui.echart(pie_opts).classes("w-full h-80")
+                else:
+                    ui.label("No income data to chart.").classes("text-sm text-gray-400")
 
     cashflow_content()
     _refreshables["cashflow_content"] = cashflow_content

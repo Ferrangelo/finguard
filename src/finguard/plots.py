@@ -6,6 +6,7 @@ import calendar
 
 import polars as pl
 
+from finguard.df_operations import Cashflow, _INCOME_CATEGORIES
 from finguard.paths import PRIMARIES_FILENAME, SECONDARIES_FILENAME, get_year_summary_path
 
 
@@ -214,6 +215,99 @@ def cumulative_expenses_pie(
         return None
 
     return {
+        "tooltip": {"trigger": "item"},
+        "legend": {"orient": "vertical", "left": "left", "textStyle": {"color": "#fff"}},
+        "series": [
+            {
+                "type": "pie",
+                "radius": "70%",
+                "data": data,
+                "label": {"color": "#fff", "fontSize": 16},
+                "labelLine": {"lineStyle": {"color": "#fff"}},
+                "itemStyle": {"borderColor": "#222", "borderWidth": 1},
+            }
+        ],
+    }
+
+
+def cashflow_bar_chart(year: int) -> dict | None:
+    """Return ECharts option dict for a grouped bar chart of Income/Spending/Saving."""
+    cf = Cashflow(year=year)
+    cf.recompute()
+
+    months = [calendar.month_abbr[m] for m in range(1, 13)]
+    income_vals = [round(cf._get_value("Income", f"{m:02d}"), 2) for m in range(1, 13)]
+    spending_vals = [round(cf._get_value("Spending", f"{m:02d}"), 2) for m in range(1, 13)]
+    saving_vals = [round(cf._get_value("Saving", f"{m:02d}"), 2) for m in range(1, 13)]
+
+    if all(v == 0 for v in income_vals + spending_vals):
+        return None
+
+    series = [
+        {
+            "name": "Income",
+            "type": "bar",
+            "data": income_vals,
+            "itemStyle": {"color": "#91cc75"},
+        },
+        {
+            "name": "Spending",
+            "type": "bar",
+            "data": spending_vals,
+            "itemStyle": {"color": "#ee6666"},
+        },
+        {
+            "name": "Saving",
+            "type": "bar",
+            "data": saving_vals,
+            "itemStyle": {"color": "#5470c6"},
+        },
+    ]
+
+    return {
+        "title": {
+            "text": "Cashflow",
+            "left": "center",
+            "top": 10,
+            "textStyle": {"color": "#fff", "fontSize": 20},
+        },
+        "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
+        "legend": {"data": ["Income", "Spending", "Saving"], "textStyle": {"color": "#fff"}},
+        "xAxis": {
+            "type": "category",
+            "data": months,
+            **_CHART_AXIS_STYLE,
+        },
+        "yAxis": {
+            "type": "value",
+            **_CHART_AXIS_STYLE,
+            "splitLine": {"lineStyle": {"color": "#555555"}},
+        },
+        "series": series,
+    }
+
+
+def income_pie_chart(year: int) -> dict | None:
+    """Return ECharts option dict for a pie chart of yearly income by category."""
+    cf = Cashflow(year=year)
+    cf.recompute()
+
+    data = []
+    for cat in _INCOME_CATEGORIES:
+        total = sum(cf._get_value(cat, f"{m:02d}") for m in range(1, 13))
+        if total > 0:
+            data.append({"name": cat, "value": round(total, 2)})
+
+    if not data:
+        return None
+
+    return {
+        "title": {
+            "text": "Sources of income",
+            "left": "center",
+            "top": 10,
+            "textStyle": {"color": "#fff", "fontSize": 20},
+        },
         "tooltip": {"trigger": "item"},
         "legend": {"orient": "vertical", "left": "left", "textStyle": {"color": "#fff"}},
         "series": [

@@ -1,10 +1,9 @@
 # Finguard
 
 A personal finance tracker with an interactive web dashboard.
-Track expenses, cashflow, investments, liquidity, and net worth — all stored locally as Parquet files with zero cloud dependencies.
+Track expenses, cashflow, investments, liquidity, and net worth. All stored locally as Parquet files with zero cloud dependencies.
 
-It follows the scheme of the old [Mr Rip spreadsheets](), which I used to track expenses in the past. I built this tool because I have little familiarity 
-with spreadsheets and don't like complex nested formulas hidden in cells and displayed in one bar. Here the same job is done with simple operations on dataframes instead.
+It follows a scheme similar to the old [Mr Rip spreadsheets](https://retireinprogress.com/how-i-track-my-finances-using-spreadsheets-part-1-why-and-what/). 
 
 Everything uses [Polars](https://pola.rs/) for data processing and Parquet for storage, simply because I am familiar with both.
 
@@ -12,18 +11,21 @@ I wrote the core logic from scratch, but the UI was almost entirely vibe-coded w
 
 ## Features
 
-- **Expense Tracking** — Add, edit, delete, and filter monthly expenses. Auto-categorize via configurable name-to-category mappings.
-- **Summary Dashboards** — Monthly and cumulative expense breakdowns by primary/secondary category with interactive pie, bar, and line charts.
-- **Cashflow** — Track salary, interest, dividends, and other income alongside spending. Automatically computes savings and savings rate.
-- **Net Worth** — Monitor investments (stocks/ETFs, commodities, bonds), liquidity (bank accounts, cash), and credits/debts over time.
-- **Local-First** — All data lives on your machine in Parquet files. Configuration stored in XDG-compliant paths.
+<details>
+<summary>Expand</summary>
 
-## Requirements
+- **Expense Tracking**: add, edit, delete, and filter monthly expenses. Auto-categorize via configurable name-to-category mappings.
+- **Summary Dashboards**: monthly and cumulative expense breakdowns by primary/secondary category with interactive pie, bar, and line charts.
+- **Cashflow**: track salary, interest, dividends, and other income alongside spending. Automatically computes savings and savings rate.
+- **Net Worth**: monitor investments (stocks/ETFs, commodities, bonds), liquidity (bank accounts, cash), and credits/debts over time.
+- **Local-First**: all data lives on your machine in Parquet files. Configuration stored in XDG-compliant paths.
 
-- **Python ≥ 3.14**
-- [uv](https://docs.astral.sh/uv/)
+</details>
 
 ## Installation
+
+<details>
+<summary>Expand</summary>
 
 ### Option A: Docker
 
@@ -33,17 +35,7 @@ cd finguard
 
 # Using docker compose (data persists in host directories)
 docker compose up -d
-
-# Or build and run manually
-docker build -t finguard .
-docker run -d --name finguard \
-  --network host \
-  -e FINGUARD_PORT=8080 \
-  -v ~/.local/share/docker/finguard:/data \
-  -v ~/.local/share/docker/finguard/config:/data/config \
-  finguard
 ```
-
 
 ### Option B: Install with uv/pip
 
@@ -59,7 +51,12 @@ uv pip install .
 # pip install .
 ```
 
+</details>
+
 ## Usage
+
+<details>
+<summary>Expand</summary>
 
 ### Start the web UI
 
@@ -72,16 +69,12 @@ finguard-ui --port 3000  # custom port
 
 With Docker the UI is available at `http://localhost:8080` as soon as the container starts.
 
-### Docker container commands
+### Docker commands
 
 ```bash
 # Docker Compose
 docker compose up -d      # start
 docker compose down       # stop and remove
-
-# Plain Docker
-docker start finguard     # start existing container
-docker stop finguard      # stop (close) container
 ```
 
 ### Navigate the dashboard
@@ -95,8 +88,11 @@ The interface has three main tabs:
 | **Net Worth** | Track investment holdings and prices, bank/broker liquidity, and credits/debts. View allocation pie charts and evolution over time. |
 
 Use the **year** and **month** selectors at the top to switch between periods. All data refreshes automatically.
+</details>
 
-### Data storage
+## Data storage
+<details>
+<summary>Expand</summary>
 
 Data is stored in two local XDG-compliant directories:
 
@@ -127,8 +123,12 @@ dbs/
     └── credits_debts.parquet          # Credits/debts
 ```
 
+</details>
 
 ## Limitations
+
+<details>
+<summary>Expand</summary>
 
 - **No currency exchange** — all amounts are assumed to be in a single currency.
 - **No automatic price updates** — investment prices must be entered manually each month.
@@ -137,13 +137,20 @@ dbs/
 - **No recurring transactions** — every expense must be entered individually; no templates or schedules.
 - **Limited mobile experience**
 
+</details>
+
 ## Tech Stack
 
-- **[NiceGUI](https://nicegui.io/)** — Python web framework (Quasar/Vue 3 under the hood)
-- **[Polars](https://pola.rs/)** — Fast DataFrame library for data processing
-- **[Apache ECharts](https://echarts.apache.org/)** — Interactive charts (via NiceGUI)
-- **[Matplotlib](https://matplotlib.org/)** — Additional plotting support
-- **Parquet** — Efficient columnar storage for all financial data
+<details>
+<summary>Expand</summary>
+
+- **[NiceGUI](https://nicegui.io/)**: python web framework
+- **[Polars](https://pola.rs/)**: fast DataFrame library for data processing
+- **[Apache ECharts](https://echarts.apache.org/)**: interactive charts
+- **[Matplotlib](https://matplotlib.org/)**
+- **Parquet**: efficient columnar storage for all financial data
+
+</details>
 
 ## License
 

@@ -1,0 +1,17 @@
+services:
+  finguard:
+    build:
+      context: .
+      network: host
+    container_name: finguard
+    network_mode: host
+    environment:
+      - FINGUARD_PORT=8080
+    volumes:
+      - ~/.local/share/docker/finguard:/data
+      - ~/.local/share/docker/finguard/config:/data/config
+    restart: unless-stopped
+
+volumes:
+  finguard-data:
+  finguard-config:

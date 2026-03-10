@@ -133,5 +133,12 @@ def index():
 
 
 def main():
-    """Entry point for the ``finguard-ui`` command."""
-    ui.run(title="Finguard", port=8080, reload=False)
+    """Entry point for the ``finguard-ui`` command.
+    Optionally specify a port for the UI server (default: 8080).
+    """
+    import sys
+    import argparse
+    parser = argparse.ArgumentParser(description="Run Finguard UI server.")
+    parser.add_argument("--port", type=int, default=8080, help="Port to run the UI server on (default: 8080)")
+    args = parser.parse_args(sys.argv[1:])
+    ui.run(title="Finguard", port=args.port, reload=False)

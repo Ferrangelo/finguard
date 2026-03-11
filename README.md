@@ -1,26 +1,24 @@
 # Finguard
 
-A personal finance tracker with an interactive web dashboard.
-Track expenses, cashflow, investments, liquidity, and net worth. All stored locally as Parquet files with zero cloud dependencies.
+Personal finance management with an interactive web dashboard.
+It monitors investments, expenses, cashflow, liquidity, and net worth. All stored locally as Parquet files with zero cloud dependencies.
 
 It follows a scheme similar to the old [Mr Rip spreadsheets](https://retireinprogress.com/how-i-track-my-finances-using-spreadsheets-part-1-why-and-what/). 
 
 Everything uses [Polars](https://pola.rs/) for data processing and Parquet for storage, simply because I am familiar with both.
 
-I wrote the core logic from scratch, but the UI was almost entirely vibe-coded with an AI assistant (which also authored most comments and docstrings). As a result the UI interface is functional but not polished.
+I wrote the core logic from scratch, but the user interface was almost entirely vibe-coded with an AI assistant (which also authored most comments and docstrings). As a result, the UI is functional but not polished.
 
 ## Features
 
-<details>
-<summary>Expand</summary>
+- **Investment Tracking**: Monitor investments (stocks/ETFs, commodities, bonds) over time.
+- **Expense Tracking**: Add, edit, delete, and filter monthly expenses. Auto-categorize via configurable name-to-category mappings.
+- **Summary Dashboards**: Monthly and cumulative expense breakdowns by primary/secondary category with interactive charts.
+- **Cashflow**: Track salary, interest, dividends, and other income alongside spending. Automatically computes savings and savings rate.
+- **Net Worth**: Keep track of all assets: liquidity, credit/debts, investments (stocks/ETFs, commodities, bonds).
+- **Local-First**: All data is stored locally in Parquet files.
 
-- **Expense Tracking**: add, edit, delete, and filter monthly expenses. Auto-categorize via configurable name-to-category mappings.
-- **Summary Dashboards**: monthly and cumulative expense breakdowns by primary/secondary category with interactive pie, bar, and line charts.
-- **Cashflow**: track salary, interest, dividends, and other income alongside spending. Automatically computes savings and savings rate.
-- **Net Worth**: monitor investments (stocks/ETFs, commodities, bonds), liquidity (bank accounts, cash), and credits/debts over time.
-- **Local-First**: all data lives on your machine in Parquet files. Configuration stored in XDG-compliant paths.
-
-</details>
+![Demo Animation](screenshots.gif)
 
 ## Installation
 
@@ -30,18 +28,18 @@ I wrote the core logic from scratch, but the UI was almost entirely vibe-coded w
 ### Option A: Docker
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/finguard.git
+git clone https://github.com/Ferrangelo/finguard.git
 cd finguard
 
 # Using docker compose (data persists in host directories)
-docker compose up -d
+docker compose up -d --build
 ```
 
 ### Option B: Install with uv/pip
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/finguard.git
+git clone https://github.com/Ferrangelo/finguard.git
 cd finguard
 
 # Create a virtual environment and install (pick one)
@@ -58,24 +56,27 @@ uv pip install .
 <details>
 <summary>Expand</summary>
 
-### Start the web UI
+### Start the web UI (docker)
 
-First activate the python environment on which finguard was installed and then run
+```bash
+# Docker Compose
+cd path/to/finguard
+docker compose up -d      # start
+docker compose down       # stop and remove
+```
+
+The UI is available at `http://localhost:8765` as soon as the container starts.
+
+
+### Start the web UI (uv/pip installation)
+
+If installed with uv/pip, first activate the Python environment on which Finguard was installed and then run
 
 ```bash
 finguard-ui              # starts on http://localhost:8765
 finguard-ui --port 3000  # custom port
 ```
 
-With Docker the UI is available at `http://localhost:8765` as soon as the container starts.
-
-### Docker commands
-
-```bash
-# Docker Compose
-docker compose up -d      # start
-docker compose down       # stop and remove
-```
 
 ### Navigate the dashboard
 
@@ -83,7 +84,7 @@ The interface has three main tabs:
 
 | Tab | What it does |
 |-----|-------------|
-| **Expenses** | View, add, edit, delete, and filter detailed monthly expenses. Switch to the *Summary* sub-tab for category breakdowns and charts. The *Mappings* sub-tab lets you define automatic expense-name --> category rules. |
+| **Expenses** | View, add, edit, delete, and filter detailed monthly expenses. Switch to the *Summary* sub-tab for category breakdowns and charts. The *Mappings* sub-tab lets you define automatic expense-name-to-category rules. |
 | **Cashflow** | Enter monthly income by category (salary, interest, dividends, other). Spending and savings are auto-calculated from expense data. |
 | **Net Worth** | Track investment holdings and prices, bank/broker liquidity, and credits/debts. View allocation pie charts and evolution over time. |
 
@@ -139,7 +140,7 @@ dbs/
 
 </details>
 
-## Tech Stack
+## Tools used for this project
 
 <details>
 <summary>Expand</summary>
@@ -151,7 +152,3 @@ dbs/
 - **Parquet**: efficient columnar storage for all financial data
 
 </details>
-
-## License
-
-MIT

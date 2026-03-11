@@ -21,22 +21,21 @@ from finguard.ui_plots import render_networth_allocation_pie, render_networth_ev
 def build_networth_tab(st, _refreshables):
     """Build the NetWorth tab content with sub-tabs.
 
-    Registers ``investment_content``, ``liquidity_content``,
-    ``credits_debts_content``, and ``total_networth_content`` in *_refreshables*.
+    Registers ``investment_content``, ``liquidity_credits_debts_content``,
+    and ``total_networth_content`` in *_refreshables*.
     """
 
     # Sub-tabs for NetWorth
     with ui.tabs().classes("w-full") as networth_tabs:
-        ui.tab("Investments").props("no-caps").classes("text-xl")
-        ui.tab("Liquidity").props("no-caps").classes("text-xl")
-        ui.tab("Credits/Debts").props("no-caps").classes("text-xl")
-        ui.tab("Total NetWorth").props("no-caps").classes("text-xl")
+        ui.tab("Investments").props("no-caps").classes("text-2xl")
+        ui.tab("Liquidity, Credits and Debts").props("no-caps").classes("text-2xl")
+        ui.tab("Total NetWorth").props("no-caps").classes("text-2xl")
 
     with ui.tab_panels(networth_tabs, value="Investments").classes("w-full"):
-        with ui.tab_panel("Liquidity"):
+        with ui.tab_panel("Liquidity, Credits and Debts"):
 
             @ui.refreshable
-            def liquidity_content():
+            def liquidity_credits_debts_content():
                 liq = Liquidity(year=st.year)
                 month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
 
@@ -70,7 +69,7 @@ def build_networth_tab(st, _refreshables):
                                     inp_cur.value.strip() or "E",
                                 )
                                 inp_name.value = ""
-                                liquidity_content.refresh()
+                                liquidity_credits_debts_content.refresh()
                                 _refreshables[
                                     "total_networth_content"
                                 ].refresh()
@@ -97,23 +96,17 @@ def build_networth_tab(st, _refreshables):
                         rename_fn=liq.rename_asset,
                         set_category_fn=liq.set_category,
                         categories=_LIQUIDITY_CATEGORIES,
-                        refresh_fn=liquidity_content.refresh,
+                        refresh_fn=liquidity_credits_debts_content.refresh,
                         on_cell_change=lambda: _refreshables[
                             "total_networth_content"
                         ].refresh(),
                     )
-
-            liquidity_content()
-            _refreshables["liquidity_content"] = liquidity_content
-
-        with ui.tab_panel("Credits/Debts"):
-
-            @ui.refreshable
-            def credits_debts_content():
+                
+                ui.separator().classes("my-6")
+                # --- Credits/Debts ---
                 cd = CreditsDebts(year=st.year)
                 month_abbrs = [calendar.month_abbr[m] for m in range(1, 13)]
-
-                # -- Add entry form --
+                
                 with ui.card().classes("mb-4"):
                     ui.label("Add Credit / Debt").classes(
                         "text-base font-semibold mb-2"
@@ -138,7 +131,7 @@ def build_networth_tab(st, _refreshables):
                                     inp_cur.value.strip() or "E",
                                 )
                                 inp_name.value = ""
-                                credits_debts_content.refresh()
+                                liquidity_credits_debts_content.refresh()
                                 _refreshables[
                                     "total_networth_content"
                                 ].refresh()
@@ -163,14 +156,15 @@ def build_networth_tab(st, _refreshables):
                         set_fn=cd.set_value,
                         remove_fn=cd.remove_entry,
                         rename_fn=cd.rename_entry,
-                        refresh_fn=credits_debts_content.refresh,
+                        refresh_fn=liquidity_credits_debts_content.refresh,
                         on_cell_change=lambda: _refreshables[
                             "total_networth_content"
                         ].refresh(),
                     )
+                    
+            liquidity_credits_debts_content()
+            _refreshables["liquidity_credits_debts_content"] = liquidity_credits_debts_content
 
-            credits_debts_content()
-            _refreshables["credits_debts_content"] = credits_debts_content
 
         with ui.tab_panel("Total NetWorth"):
 

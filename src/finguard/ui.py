@@ -52,8 +52,7 @@ def index():
         _refreshables["summary_content"].refresh()
         _refreshables["cashflow_content"].refresh()
         _refreshables["investment_content"].refresh()
-        _refreshables["liquidity_content"].refresh()
-        _refreshables["credits_debts_content"].refresh()
+        _refreshables["liquidity_credits_debts_content"].refresh()
         if "total_networth_content" in _refreshables:
             _refreshables["total_networth_content"].refresh()
 
@@ -63,8 +62,7 @@ def index():
         _refreshables["refresh_table"]()
         _refreshables["summary_content"].refresh()
         _refreshables["investment_content"].refresh()
-        _refreshables["liquidity_content"].refresh()
-        _refreshables["credits_debts_content"].refresh()
+        _refreshables["liquidity_credits_debts_content"].refresh()
         if "total_networth_content" in _refreshables:
             _refreshables["total_networth_content"].refresh()
 
@@ -93,11 +91,9 @@ def index():
 
     # -- tabs ----------------------------------------------------------------
     with ui.tabs().classes("w-full") as tabs:
-        ui.tab("Expenses").props("no-caps").classes("text-xl")
-        # ui.tab("Summary").props("no-caps").classes("text-xl")
-        ui.tab("Cashflow").props("no-caps").classes("text-xl")
-        ui.tab("NetWorth").props("no-caps").classes("text-xl")
-        # ui.tab("Mappings").props("no-caps").classes("text-xl")
+        ui.tab("Expenses").props("no-caps").classes("text-2xl")
+        ui.tab("Cashflow").props("no-caps").classes("text-2xl")
+        ui.tab("NetWorth").props("no-caps").classes("text-2xl")
 
     with ui.tab_panels(tabs, value="Expenses").classes("w-full"):
         # ===================== EXPENSES TAB =================================
@@ -120,8 +116,7 @@ def index():
             _refreshables["cashflow_content"].refresh()
         elif e.value == "NetWorth":
             _refreshables["investment_content"].refresh()
-            _refreshables["liquidity_content"].refresh()
-            _refreshables["credits_debts_content"].refresh()
+            _refreshables["liquidity_credits_debts_content"].refresh()
             _refreshables["total_networth_content"].refresh()
 
     tabs.on_value_change(_on_tab_change)

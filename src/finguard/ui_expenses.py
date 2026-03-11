@@ -159,27 +159,50 @@ def build_expenses_tab(st, _refreshables):
 
     def open_add_dialog():
         today = date.today()
+
+        if st.de is not None:
+            pri_cats = sorted(
+                {v for v in st.de.expense_df["primary_category"].drop_nulls().to_list() if v}
+            )
+            sec_cats = sorted(
+                {v for v in st.de.expense_df["secondary_category"].drop_nulls().to_list() if v}
+            )
+        else:
+            pri_cats, sec_cats = [], []
+
         with ui.dialog() as dlg, ui.card().classes("w-80"):
             ui.label("Add Expense").classes("text-lg font-bold mb-2")
             inp_name = ui.input("Expense Name").classes("w-64")
             inp_day = ui.number("Day of Month", value=today.day, min=1, max=31).classes("w-40")
             inp_amount = ui.input("Amount", value="").classes("w-64")
             inp_cur = ui.input("Currency", value="E").classes("w-64")
-            inp_pri = ui.input("Primary Category").classes("w-64")
-            inp_sec = ui.input("Secondary Category (optional)").classes("w-64")
+            inp_pri = ui.select(
+                options=pri_cats,
+                with_input=True,
+                label="Primary Category",
+                new_value_mode="add",
+            ).classes("w-64")
+            inp_sec = ui.select(
+                options=sec_cats,
+                with_input=True,
+                label="Secondary Category (optional)",
+                new_value_mode="add",
+            ).classes("w-64")
 
             def on_name_blur():
                 mapping = get_mapping(inp_name.value)
                 if mapping:
-                    inp_pri.value = normalize_category_value(
-                        mapping["primary_category"]
-                    )
-                    inp_sec.value = normalize_category_value(
-                        mapping["secondary_category"]
-                    )
+                    pri = normalize_category_value(mapping["primary_category"])
+                    sec = normalize_category_value(mapping["secondary_category"])
+                    if pri and pri not in inp_pri.options:
+                        inp_pri.options.append(pri)
+                    if sec and sec not in inp_sec.options:
+                        inp_sec.options.append(sec)
+                    inp_pri.value = pri
+                    inp_sec.value = sec
                     inp_pri.update()
                     inp_sec.update()
-                    ui.notify(f"Auto-mapped to {inp_pri.value}", type="info")
+                    ui.notify(f"Auto-mapped to {pri}", type="info")
 
             inp_name.on("blur", on_name_blur)
 

@@ -159,14 +159,14 @@ def build_expenses_tab(st, _refreshables):
 
     def open_add_dialog():
         today = date.today()
-        with ui.dialog() as dlg, ui.card().classes("w-96"):
+        with ui.dialog() as dlg, ui.card().classes("w-80"):
             ui.label("Add Expense").classes("text-lg font-bold mb-2")
-            inp_name = ui.input("Expense Name")
-            inp_day = ui.number("Day of Month", value=today.day, min=1, max=31)
-            inp_amount = ui.input("Amount", value="")
-            inp_cur = ui.input("Currency", value="E")
-            inp_pri = ui.input("Primary Category (optional if mapped)")
-            inp_sec = ui.input("Secondary Category (optional)")
+            inp_name = ui.input("Expense Name").classes("w-64")
+            inp_day = ui.number("Day of Month", value=today.day, min=1, max=31).classes("w-40")
+            inp_amount = ui.input("Amount", value="").classes("w-64")
+            inp_cur = ui.input("Currency", value="E").classes("w-64")
+            inp_pri = ui.input("Primary Category").classes("w-64")
+            inp_sec = ui.input("Secondary Category (optional)").classes("w-64")
 
             def on_name_blur():
                 mapping = get_mapping(inp_name.value)

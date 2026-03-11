@@ -149,6 +149,6 @@ dbs/
 - **[Polars](https://pola.rs/)**: fast DataFrame library for data processing
 - **[Apache ECharts](https://echarts.apache.org/)**: interactive charts
 - **[Matplotlib](https://matplotlib.org/)**
-- **Parquet**: efficient columnar storage for all financial data
+- **[Parquet](https://parquet.apache.org/docs/file-format/)**: efficient columnar storage for all financial data
 
 </details>

@@ -170,10 +170,10 @@ def build_expenses_tab(st, _refreshables):
         else:
             pri_cats, sec_cats = [], []
 
-        with ui.dialog() as dlg, ui.card().classes("w-80"):
+        with ui.dialog() as dlg, ui.card().classes("w-80 items-center"):
             ui.label("Add Expense").classes("text-lg font-bold mb-2")
             inp_name = ui.input("Expense Name").classes("w-64")
-            inp_day = ui.number("Day of Month", value=today.day, min=1, max=31).classes("w-40")
+            inp_day = ui.input("Day of Month", value=str(today.day)).classes("w-64")
             inp_amount = ui.input("Amount", value="").classes("w-64")
             inp_cur = ui.input("Currency", value="E").classes("w-64")
             inp_pri = ui.select(
@@ -213,7 +213,7 @@ def build_expenses_tab(st, _refreshables):
                 if not inp_name.value:
                     ui.notify("Expense name is required", type="warning")
                     return
-                if inp_day.value is None or not inp_amount.value:
+                if not inp_day.value or not inp_amount.value:
                     ui.notify("Day and amount are required", type="warning")
                     return
                 try:

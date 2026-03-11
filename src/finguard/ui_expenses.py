@@ -99,7 +99,13 @@ def build_expenses_tab(st, _refreshables):
         df = st.de.expense_df.with_row_index("_idx")
         for col, val in updates.items():
             if col == "expense_date":
-                val = date.fromisoformat(val) if isinstance(val, str) else val
+                # If user entered just a day, construct full date
+                if isinstance(val, str) and val.isdigit():
+                    # Use st.year and st.month from app state
+                    full_date = date(st.year, st.month, int(val))
+                    val = full_date.isoformat()
+                elif isinstance(val, str):
+                    val = date.fromisoformat(val) if isinstance(val, str) else val
             df = df.with_columns(
                 pl.when(pl.col("_idx") == row_id)
                 .then(pl.lit(val))
@@ -118,7 +124,7 @@ def build_expenses_tab(st, _refreshables):
         with ui.dialog() as dlg, ui.card().classes("w-96"):
             ui.label("Edit Expense").classes("text-lg font-bold mb-2")
             inp_name = ui.input("Name", value=row.get("expense_name", ""))
-            inp_date = ui.input("Date (YYYY-MM-DD)", value=row.get("expense_date", ""))
+            inp_date = ui.input("Day of the Month", value=row.get("expense_date", ""))
             inp_amount = ui.input("Amount", value=str(row.get("expense_amount", 0)))
             inp_cur = ui.input("Currency", value=row.get("currency", "E"))
             inp_pri = ui.input(
@@ -173,7 +179,7 @@ def build_expenses_tab(st, _refreshables):
         with ui.dialog() as dlg, ui.card().classes("w-80 items-center"):
             ui.label("Add Expense").classes("text-lg font-bold mb-2")
             inp_name = ui.input("Expense Name").classes("w-64")
-            inp_day = ui.input("Day of Month", value=str(today.day)).classes("w-64")
+            inp_day = ui.input("Day of the Month", value=str(today.day)).classes("w-64")
             inp_amount = ui.input("Amount", value="").classes("w-64")
             inp_cur = ui.input("Currency", value="E").classes("w-64")
             inp_pri = ui.select(

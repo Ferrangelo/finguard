@@ -63,11 +63,11 @@ uv pip install .
 First activate the python environment on which finguard was installed and then run
 
 ```bash
-finguard-ui              # starts on http://localhost:8080
+finguard-ui              # starts on http://localhost:8765
 finguard-ui --port 3000  # custom port
 ```
 
-With Docker the UI is available at `http://localhost:8080` as soon as the container starts.
+With Docker the UI is available at `http://localhost:8765` as soon as the container starts.
 
 ### Docker commands
 

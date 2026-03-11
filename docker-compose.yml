@@ -6,7 +6,7 @@ services:
     container_name: finguard
     network_mode: host
     environment:
-      - FINGUARD_PORT=8080
+      - FINGUARD_PORT=8765
     volumes:
       - ~/.local/share/docker/finguard:/data
       - ~/.local/share/docker/finguard/config:/data/config

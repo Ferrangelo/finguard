@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Build and push the image
         run: |
           docker login --username ferrangelo --password ${{ secrets.GHCR_PAT }} ghcr.io

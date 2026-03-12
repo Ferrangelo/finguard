@@ -1,0 +1,21 @@
+name: Build and publish Docker image
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and push the image
+        run: |
+          docker login --username ferrangelo --password ${{ secrets.GHCR_PAT }} ghcr.io
+          docker build . --tag ghcr.io/ferrangelo/finguard:latest
+          docker push ghcr.io/ferrangelo/finguard:latest

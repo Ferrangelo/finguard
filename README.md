@@ -25,15 +25,32 @@ I wrote the core logic from scratch, but the user interface was almost entirely 
 <details>
 <summary>Expand</summary>
 
-### Option A: Docker
+### Option A: Install and run with docker
 
-```bash
-git clone https://github.com/Ferrangelo/finguard.git
-cd finguard
+Download the `docker-compose.yml` file and cd into the directory where this file is stored.
 
-# Using docker compose (data persists in host directories)
-docker compose up -d --build
+Before starting the service the user should set `PUID` and `PGID` so files created by the container are owned by the host user. Do one of the following:
+
+- Export in your current shell (temporary for this session):
 ```
+export PUID=$(id -u)
+export PGID=$(id -g)
+docker compose up -d
+```
+
+- Or create a persistent `.env` file next to `docker-compose.yml`. To auto-create it with the current UID/GID:
+```
+printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > .env
+```
+
+Finally install with:
+
+```
+docker compose up -d
+```
+
+Notes:
+- `${HOME}` is expanded on the machine where `docker compose` is run. If it is run as `root`, then `${HOME}` may expand to `/root` and bind mounts may point to `/root/.local/share` and `/root/.config`.
 
 ### Option B: Install with uv/pip
 
@@ -99,8 +116,6 @@ Data is stored in two local XDG-compliant directories:
 
 - **Expense & financial data** — `$XDG_DATA_HOME/finguard/` (default: `~/.local/share/finguard/`)
 - **Category mappings** — `$XDG_CONFIG_HOME/finguard/` (default: `~/.config/finguard/`)
-
-With Docker Compose, the data directory is bind-mounted to `~/.local/share/docker/finguard/`.
 
 | What | Path |
 |------|------|

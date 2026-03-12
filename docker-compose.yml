@@ -1,17 +1,23 @@
 services:
   finguard:
-    build:
-      context: .
-      network: host
+    image: ghcr.io/ferrangelo/finguard:latest
     container_name: finguard
-    network_mode: host
+
+    ports:
+      - "${FINGUARD_PORT:-8765}:${FINGUARD_PORT:-8765}"
+
     environment:
-      - FINGUARD_PORT=8765
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+
     volumes:
-      - ~/.local/share/docker/finguard:/data
-      - ~/.local/share/docker/finguard/config:/data/config
+      # If docker compose is run by root then these folders will be /.local/share and /.config,
+      # If it's run by user they will be /home/username/.local/share and /home/username/.config
+      - "${HOME}/.local/share:/data"
+      - "${HOME}/.config:/config"
+
     restart: unless-stopped
 
 volumes:
-  finguard-data:
-  finguard-config:
+  finguard_data:
+  finguard_config:

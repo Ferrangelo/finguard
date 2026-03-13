@@ -43,7 +43,7 @@ docker compose up -d
 printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > .env
 ```
 
-Finally install with:
+Finally install with (this will pull the latest image if it doesn't already exist locally):
 
 ```
 docker compose up -d
@@ -51,6 +51,21 @@ docker compose up -d
 
 Notes:
 - `${HOME}` is expanded on the machine where `docker compose` is run. If it is run as `root`, then `${HOME}` may expand to `/root` and bind mounts may point to `/root/.local/share` and `/root/.config`.
+#### Update docker image
+
+To update, pull the latest image:
+
+```bash
+# Pull images for services defined in docker-compose.yml
+docker compose pull
+```
+
+Then run it
+
+```bash
+# Start using the pulled image and recreate the container
+docker compose up -d --no-build --force-recreate
+```
 
 ### Option B: Install with uv/pip
 

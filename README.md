@@ -1,6 +1,6 @@
 # Finguard
 
-Personal finance management with an interactive web dashboard.
+Tool for my personal finance management with an interactive web dashboard.
 It monitors investments, expenses, cashflow, liquidity, and net worth. All stored locally as Parquet files with zero cloud dependencies.
 
 It follows a scheme similar to the old [Mr Rip spreadsheets](https://retireinprogress.com/how-i-track-my-finances-using-spreadsheets-part-1-why-and-what/). 
@@ -146,11 +146,11 @@ dbs/
 <details>
 <summary>Expand</summary>
 
-- **No currency exchange** — all amounts are assumed to be in a single currency.
-- **No automatic price updates** — investment prices must be entered manually each month.
+- **No currency exchange**: all amounts are assumed to be in a single currency.
+- **No automatic price updates**: investment prices must be entered manually each month.
 - **No authentication or multi-user support**
-- **No data import/export** — no CSV, bank-statement, or spreadsheet import; no export functionality (however the parquet files are always saved to disk).
-- **No recurring transactions** — every expense must be entered individually; no templates or schedules.
+- **No data import/export**: no CSV, bank-statement, or spreadsheet import; no export functionality (however the parquet files are always saved to disk).
+- **No recurring transactions**: every expense must be entered individually; no templates or schedules.
 - **Limited mobile experience**
 
 </details>

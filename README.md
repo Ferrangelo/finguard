@@ -1,6 +1,6 @@
 # Finguard
 
-Personal finance management with an interactive web dashboard.
+Tool for my personal finance management with an interactive web dashboard.
 It monitors investments, expenses, cashflow, liquidity, and net worth. All stored locally as Parquet files with zero cloud dependencies.
 
 It follows a scheme similar to the old [Mr Rip spreadsheets](https://retireinprogress.com/how-i-track-my-finances-using-spreadsheets-part-1-why-and-what/). 

@@ -161,11 +161,11 @@ dbs/
 <details>
 <summary>Expand</summary>
 
-- **No currency exchange** — all amounts are assumed to be in a single currency.
-- **No automatic price updates** — investment prices must be entered manually each month.
+- **No currency exchange**: all amounts are assumed to be in a single currency.
+- **No automatic price updates**: investment prices must be entered manually each month.
 - **No authentication or multi-user support**
-- **No data import/export** — no CSV, bank-statement, or spreadsheet import; no export functionality (however the parquet files are always saved to disk).
-- **No recurring transactions** — every expense must be entered individually; no templates or schedules.
+- **No data import/export**: no CSV, bank-statement, or spreadsheet import; no export functionality (however the parquet files are always saved to disk).
+- **No recurring transactions**: every expense must be entered individually; no templates or schedules.
 - **Limited mobile experience**
 
 </details>

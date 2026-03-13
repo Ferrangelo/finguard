@@ -28,6 +28,7 @@ from finguard.paths import (
     SECONDARIES_FILENAME,
     get_year_summary_path,
 )
+from finguard.paths import get_dbs_root
 from finguard.ui_helpers import (
     _EXPENSE_COLUMNS,
     _MONTH_NAMES,
@@ -166,15 +167,45 @@ def build_expenses_tab(st, _refreshables):
     def open_add_dialog():
         today = date.today()
 
+        pri_cats_set: set[str] = set()
+        sec_cats_set: set[str] = set()
+
         if st.de is not None:
-            pri_cats = sorted(
-                {v for v in st.de.expense_df["primary_category"].drop_nulls().to_list() if v}
+            pri_cats_set.update(
+                v for v in st.de.expense_df["primary_category"].drop_nulls().to_list() if v
             )
-            sec_cats = sorted(
-                {v for v in st.de.expense_df["secondary_category"].drop_nulls().to_list() if v}
+            sec_cats_set.update(
+                v for v in st.de.expense_df["secondary_category"].drop_nulls().to_list() if v
             )
-        else:
-            pri_cats, sec_cats = [], []
+
+        # Also include categories from cumulative summary tables across all years
+        try:
+            dbs_root = get_dbs_root()
+            for year_dir in dbs_root.iterdir():
+                if not year_dir.is_dir():
+                    continue
+
+                pri_path = year_dir / PRIMARIES_FILENAME
+                if pri_path.exists():
+                    cum = pl.read_parquet(str(pri_path))
+                    if "primary_category" in cum.columns:
+                        pri_cats_set.update(
+                            c for c in cum["primary_category"].to_list() if c and c != "Total"
+                        )
+
+                sec_path = year_dir / SECONDARIES_FILENAME
+                if sec_path.exists():
+                    cum = pl.read_parquet(str(sec_path))
+                    if "secondary_category" in cum.columns:
+                        sec_cats_set.update(
+                            c for c in cum["secondary_category"].to_list() if c and c != "Total"
+                        )
+        except Exception:
+            # If anything goes wrong reading summaries, fall back to month-only lists
+            pass
+
+        pri_cats = sorted({normalize_category_value(c) for c in pri_cats_set})
+        sec_cats = sorted({normalize_category_value(c) for c in sec_cats_set})
 
         with ui.dialog() as dlg, ui.card().classes("w-80 items-center"):
             ui.label("Add Expense").classes("text-lg font-bold mb-2")

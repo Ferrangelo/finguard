@@ -42,6 +42,8 @@ from finguard.ui_plots import (
     render_monthly_expenses_pie,
 )
 
+print("Hello, world from ui_expenses.py")
+
 
 def build_expenses_tab(st, _refreshables):
     """Build the Expenses tab content with sub-tabs.
@@ -104,7 +106,7 @@ def build_expenses_tab(st, _refreshables):
                 if isinstance(val, str) and val.isdigit():
                     # Use st.year and st.month from app state
                     full_date = date(st.year, st.month, int(val))
-                    val = full_date.isoformat()
+                    val = full_date
                 elif isinstance(val, str):
                     val = date.fromisoformat(val) if isinstance(val, str) else val
             df = df.with_columns(

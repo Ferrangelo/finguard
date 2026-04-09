@@ -49,6 +49,18 @@ def normalize_category_value(value: str) -> str:
     return lower[0].upper() + lower[1:] if lower else lower
 
 
+def resolve_category(value: str, existing: set[str]) -> str:
+    """Match *value* case-insensitively against *existing* categories.
+
+    If a match is found the existing spelling is returned; otherwise falls
+    back to :func:`normalize_category_value`.
+    """
+    if not value:
+        return value
+    lookup = {c.lower(): c for c in existing}
+    return lookup.get(value.lower(), normalize_category_value(value))
+
+
 # Canonical display order for primary categories.
 _PRIMARY_CATEGORY_ORDER = [
     "Housing",

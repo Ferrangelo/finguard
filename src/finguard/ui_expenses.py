@@ -22,6 +22,7 @@ from finguard.config import (
 from finguard.df_operations import (
     Cashflow,
     normalize_category_value,
+    resolve_category,
 )
 from finguard.paths import (
     PRIMARIES_FILENAME,
@@ -142,6 +143,12 @@ def build_expenses_tab(st, _refreshables):
                     ui.notify("Amount is required", type="warning")
                     return
                 try:
+                    existing_pri = set(
+                        v for v in st.de.expense_df["primary_category"].drop_nulls().to_list() if v
+                    ) if st.de is not None else set()
+                    existing_sec = set(
+                        v for v in st.de.expense_df["secondary_category"].drop_nulls().to_list() if v
+                    ) if st.de is not None else set()
                     amount = _safe_eval_expr(str(inp_amount.value))
                     save_edit(
                         row_id,
@@ -151,9 +158,9 @@ def build_expenses_tab(st, _refreshables):
                             "expense_amount": amount,
                             "currency": inp_cur.value,
                             "expense_in_ref_currency": amount,
-                            "primary_category": normalize_category_value(inp_pri.value),
-                            "secondary_category": normalize_category_value(
-                                inp_sec.value
+                            "primary_category": resolve_category(inp_pri.value, existing_pri),
+                            "secondary_category": resolve_category(
+                                inp_sec.value, existing_sec
                             ),
                         },
                     )
@@ -261,8 +268,8 @@ def build_expenses_tab(st, _refreshables):
                         expense_day=int(inp_day.value),
                         expense_amount=_safe_eval_expr(str(inp_amount.value)),
                         currency=inp_cur.value,
-                        primary_category=inp_pri.value or None,
-                        secondary_category=inp_sec.value or None,
+                        primary_category=resolve_category(inp_pri.value, set(pri_cats)) if inp_pri.value else None,
+                        secondary_category=resolve_category(inp_sec.value, set(sec_cats)) if inp_sec.value else None,
                     )
                     refresh_table()
                     dlg.close()

@@ -406,6 +406,19 @@ def build_expenses_tab(st, _refreshables):
                     )
                     cum = pl.read_parquet(str(path))
 
+                    # Remove categories with zero expenses in all months
+                    month_cols = [
+                        c for c in cum.columns
+                        if "-" in c and c.split("-")[1].isdigit()
+                    ]
+                    if month_cols:
+                        all_zero = pl.all_horizontal(
+                            pl.col(c).fill_null(0) == 0 for c in month_cols
+                        )
+                        cum = cum.filter(
+                            ~all_zero | (pl.col(cat_col) == "Total")
+                        )
+
                     def _col_label(c: str) -> str:
                         if "_" in c:
                             return c.replace("_", " ").title()

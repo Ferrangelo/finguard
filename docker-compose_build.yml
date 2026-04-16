@@ -1,0 +1,26 @@
+services:
+  finguard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: finguard:test
+    container_name: finguard_build
+
+    ports:
+      - "${FINGUARD_PORT:-8765}:${FINGUARD_PORT:-8765}"
+
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+
+    volumes:
+      # If docker compose is run by root then these folders will be /.local/share and /.config,
+      # If it's run by user they will be /home/username/.local/share and /home/username/.config
+      - "${HOME}/.local/share:/data"
+      - "${HOME}/.config:/config"
+
+    restart: unless-stopped
+
+volumes:
+  finguard_data:
+  finguard_config:

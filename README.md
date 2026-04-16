@@ -17,7 +17,7 @@ I wrote the core logic from scratch, but the user interface was almost entirely 
 - **Cashflow**: Track salary, interest, dividends, and other income alongside spending. Automatically computes savings and savings rate.
 - **Net Worth**: Keep track of all assets: liquidity, credit/debts, investments (stocks/ETFs, commodities, bonds).
 - **Local-First**: All data is stored locally in Parquet files.
-- **Recurring Expenses**: Define recurring monthly expenses (templates) and apply them to any month via the Expenses → Recurring sub-tab.
+- **Recurring expenses**: supported via the Expenses → Recurring sub-tab. Define templates and apply them to any month; instances are stored per-month separately.
 ![Demo Animation](screenshots.gif)
 
 ## Installation
@@ -165,7 +165,10 @@ dbs/
 - **No automatic price updates**: investment prices must be entered manually each month.
 - **No authentication or multi-user support**
 - **No data import/export**: no CSV, bank-statement, or spreadsheet import; no export functionality (however the parquet files are always saved to disk).
+<<<<<<< HEAD
 - **Recurring transactions**: supported via the Expenses → Recurring sub-tab — define templates and apply them to any month; instances are stored per-month separately.
+=======
+>>>>>>> dev
 - **Limited mobile experience**
 
 </details>

@@ -164,8 +164,7 @@ dbs/
 - **No currency exchange**: all amounts are assumed to be in a single currency.
 - **No automatic price updates**: investment prices must be entered manually each month.
 - **No authentication or multi-user support**
-- **No data import/export**: no CSV, bank-statement, or spreadsheet import; no export functionality (however the parquet files are always saved to disk).
-- **Recurring transactions**: supported via the Expenses → Recurring sub-tab — define templates and apply them to any month; instances are stored per-month separately.
+- **No data import/export**: no CSV, bank-statement, or spreadsheet import; no export functionality (however the parquet files are always saved to disk). 
 - **Limited mobile experience**
 
 </details>

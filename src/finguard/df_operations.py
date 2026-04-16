@@ -12,6 +12,7 @@ from finguard.paths import (
     INVESTMENTS_PRICES_FILENAME,
     LIQUIDITY_FILENAME,
     PRIMARIES_FILENAME,
+    RECURRING_EXPENSES_FILENAME,
     SECONDARIES_FILENAME,
     get_monthly_parquet_path,
     get_year_summary_path,
@@ -982,4 +983,99 @@ class CreditsDebts:
 
     def save(self) -> None:
         """Write the credits/debts dataframe to disk."""
+        self.df.write_parquet(str(self._path))
+
+
+# ======================================================================
+# RecurringExpenses
+# ======================================================================
+
+_RECURRING_SCHEMA = {
+    "expense_name": pl.Utf8,
+    "expense_day": pl.Int64,
+    "expense_amount": pl.Float64,
+    "currency": pl.Utf8,
+    "primary_category": pl.Utf8,
+    "secondary_category": pl.Utf8,
+}
+
+
+class RecurringExpenses:
+    """Manage recurring monthly expense definitions.
+
+    Stored per year in
+    ``<dbs_root>/<year>/recurring_expenses.parquet``.
+
+    Parameters
+    ----------
+    year:
+        Calendar year (e.g. 2026).
+    """
+
+    def __init__(self, year: int):
+        self.year = year
+        self._path = get_year_summary_path(year, RECURRING_EXPENSES_FILENAME)
+
+        if self._path.exists():
+            self.df = pl.read_parquet(str(self._path))
+        else:
+            self.df = pl.DataFrame(schema=_RECURRING_SCHEMA)
+
+    def add(self, expense_name: str, expense_day: int, expense_amount: float,
+            currency: str, primary_category: str,
+            secondary_category: str = "") -> None:
+        """Add a recurring expense definition."""
+        if not 1 <= expense_day <= 28:
+            raise ValueError(
+                f"expense_day must be between 1 and 28, got {expense_day}"
+            )
+        new_row = pl.DataFrame({
+            "expense_name": [expense_name],
+            "expense_day": [expense_day],
+            "expense_amount": [expense_amount],
+            "currency": [currency],
+            "primary_category": [normalize_category_value(primary_category)],
+            "secondary_category": [normalize_category_value(secondary_category)],
+        })
+        self.df = pl.concat([self.df, new_row], how="diagonal")
+        self.save()
+
+    def remove(self, index: int) -> None:
+        """Remove a recurring expense by row index."""
+        df = self.df.with_row_index("_idx")
+        self.df = df.filter(pl.col("_idx") != index).drop("_idx")
+        self.save()
+
+    def apply_to_month(
+        self, de: "DetailedExpenses",
+    ) -> list[str]:
+        """Insert all recurring definitions into the given month.
+
+        Skips entries that already exist (matched by expense_name and
+        expense_day).  Returns a list of expense names that were added.
+        """
+        added: list[str] = []
+        for row in self.df.iter_rows(named=True):
+            name = row["expense_name"]
+            day = row["expense_day"]
+            # Check for duplicate: same name and same day already in month
+            existing = de.expense_df.filter(
+                (pl.col("expense_name") == name)
+                & (pl.col("expense_date").dt.day() == day)
+            )
+            if existing.height > 0:
+                continue
+            de.add_row(
+                expense_name=name,
+                expense_day=day,
+                expense_amount=row["expense_amount"],
+                currency=row["currency"],
+                primary_category=row["primary_category"],
+                secondary_category=row["secondary_category"],
+            )
+            added.append(name)
+        return added
+
+    def save(self) -> None:
+        """Write the recurring expenses dataframe to disk."""
         self.df.write_parquet(str(self._path))

@@ -21,6 +21,7 @@ from finguard.config import (
 )
 from finguard.df_operations import (
     Cashflow,
+    RecurringExpenses,
     normalize_category_value,
     resolve_category,
 )
@@ -303,6 +304,7 @@ def build_expenses_tab(st, _refreshables):
     with ui.tabs().classes("w-full") as exp_subtabs:
         ui.tab("Detailed expenses").props("no-caps").classes("text-xl")
         ui.tab("Summary").props("no-caps").classes("text-xl")
+        ui.tab("Recurring").props("no-caps").classes("text-xl")
         ui.tab("Mappings expense-categories").props("no-caps").classes("text-xl")
 
     with ui.tab_panels(exp_subtabs, value="Detailed expenses").classes("w-full"):
@@ -546,6 +548,170 @@ def build_expenses_tab(st, _refreshables):
                 icon="refresh",
                 on_click=update_summaries,
             ).classes("mt-4")
+
+        # ===================== RECURRING TAB ================================
+        with ui.tab_panel("Recurring"):
+
+            @ui.refreshable
+            def recurring_content():
+                rec = RecurringExpenses(year=st.year)
+
+                # -- Add recurring expense form --
+                pri_cats_set: set[str] = set()
+                sec_cats_set: set[str] = set()
+                if st.de is not None:
+                    pri_cats_set.update(
+                        v for v in st.de.expense_df["primary_category"].drop_nulls().to_list() if v
+                    )
+                    sec_cats_set.update(
+                        v for v in st.de.expense_df["secondary_category"].drop_nulls().to_list() if v
+                    )
+                try:
+                    dbs_root = get_dbs_root()
+                    for year_dir in dbs_root.iterdir():
+                        if not year_dir.is_dir():
+                            continue
+                        pri_path = year_dir / PRIMARIES_FILENAME
+                        if pri_path.exists():
+                            cum = pl.read_parquet(str(pri_path))
+                            if "primary_category" in cum.columns:
+                                pri_cats_set.update(
+                                    c for c in cum["primary_category"].to_list() if c and c != "Total"
+                                )
+                        sec_path = year_dir / SECONDARIES_FILENAME
+                        if sec_path.exists():
+                            cum = pl.read_parquet(str(sec_path))
+                            if "secondary_category" in cum.columns:
+                                sec_cats_set.update(
+                                    c for c in cum["secondary_category"].to_list() if c and c != "Total"
+                                )
+                except Exception:
+                    pass
+
+                pri_cats = sorted({normalize_category_value(c) for c in pri_cats_set})
+                sec_cats = sorted({normalize_category_value(c) for c in sec_cats_set})
+
+                with ui.row().classes("items-end gap-4 mb-4"):
+                    new_name = ui.input("Expense Name").classes("w-48")
+                    new_day = ui.input("Day of Month", value="1").classes("w-24")
+                    new_amount = ui.input("Amount").classes("w-32")
+                    new_cur = ui.input("Currency", value="E").classes("w-20")
+                    new_pri = ui.select(
+                        options=pri_cats,
+                        with_input=True,
+                        label="Primary Category",
+                        new_value_mode="add",
+                    ).classes("w-48")
+                    new_sec = ui.select(
+                        options=sec_cats,
+                        with_input=True,
+                        label="Secondary Category",
+                        new_value_mode="add",
+                    ).classes("w-48")
+
+                    def on_rec_name_blur():
+                        mapping = get_mapping(new_name.value)
+                        if mapping:
+                            pri = normalize_category_value(mapping["primary_category"])
+                            sec = normalize_category_value(mapping["secondary_category"])
+                            if pri and pri not in new_pri.options:
+                                new_pri.options.append(pri)
+                            if sec and sec not in new_sec.options:
+                                new_sec.options.append(sec)
+                            new_pri.value = pri
+                            new_sec.value = sec
+                            new_pri.update()
+                            new_sec.update()
+
+                    new_name.on("blur", on_rec_name_blur)
+
+                    def do_add_recurring():
+                        if not new_name.value or not new_amount.value:
+                            ui.notify("Name and amount are required", type="warning")
+                            return
+                        try:
+                            rec.add(
+                                expense_name=new_name.value,
+                                expense_day=int(new_day.value),
+                                expense_amount=_safe_eval_expr(str(new_amount.value)),
+                                currency=new_cur.value,
+                                primary_category=resolve_category(
+                                    new_pri.value, set(pri_cats)
+                                ) if new_pri.value else "",
+                                secondary_category=resolve_category(
+                                    new_sec.value, set(sec_cats)
+                                ) if new_sec.value else "",
+                            )
+                            ui.notify(f'Recurring "{new_name.value}" added', type="positive")
+                            recurring_content.refresh()
+                        except Exception as exc:
+                            ui.notify(str(exc), type="negative")
+
+                    ui.button("Add Recurring", icon="add", on_click=do_add_recurring)
+
+                # -- Apply to current month button --
+                def do_apply():
+                    if st.de is None:
+                        ui.notify("No data loaded", type="negative")
+                        return
+                    rec_fresh = RecurringExpenses(year=st.year)
+                    if rec_fresh.df.height == 0:
+                        ui.notify("No recurring expenses defined", type="warning")
+                        return
+                    added = rec_fresh.apply_to_month(st.de)
+                    if added:
+                        refresh_table()
+                        ui.notify(
+                            f"Applied {len(added)} recurring expense(s): {', '.join(added)}",
+                            type="positive",
+                        )
+                    else:
+                        ui.notify("All recurring expenses already present this month", type="info")
+
+                ui.button(
+                    f"Apply to {_MONTH_NAMES[st.month]} {st.year}",
+                    icon="playlist_add",
+                    on_click=do_apply,
+                ).classes("mb-4")
+
+                # -- Table of existing recurring definitions --
+                if rec.df.height > 0:
+                    rcols = [
+                        {"name": "expense_name", "label": "Name", "field": "expense_name", "align": "left", "sortable": True},
+                        {"name": "expense_day", "label": "Day", "field": "expense_day", "align": "center", "sortable": True},
+                        {"name": "expense_amount", "label": "Amount", "field": "expense_amount", "align": "right", "sortable": True},
+                        {"name": "currency", "label": "Cur", "field": "currency", "align": "center"},
+                        {"name": "primary_category", "label": "Primary", "field": "primary_category", "align": "left", "sortable": True},
+                        {"name": "secondary_category", "label": "Secondary", "field": "secondary_category", "align": "left", "sortable": True},
+                        {"name": "actions", "label": "", "field": "actions", "align": "center"},
+                    ]
+                    rrows = [
+                        {"id": i, **row}
+                        for i, row in enumerate(rec.df.iter_rows(named=True))
+                    ]
+                    rt = ui.table(
+                        columns=rcols, rows=rrows, row_key="id",
+                    ).classes("w-full text-lg")
+                    rt.add_slot(
+                        "body-cell-actions",
+                        """
+                        <q-td :props="props">
+                            <q-btn flat dense icon="delete" color="negative"
+                                @click="$parent.$emit('delete', props.row)" />
+                        </q-td>
+                        """,
+                    )
+
+                    def do_delete_recurring(e):
+                        rec.remove(int(e.args["id"]))
+                        ui.notify("Recurring expense removed", type="positive")
+                        recurring_content.refresh()
+
+                    rt.on("delete", do_delete_recurring)
+                else:
+                    ui.label("No recurring expenses defined yet.").classes("text-gray-500")
+
+            recurring_content()
 
         # ===================== MAPPINGS TAB =================================
         with ui.tab_panel("Mappings expense-categories"):

@@ -308,9 +308,17 @@ def build_expenses_tab(st, _refreshables):
                 if mapping:
                     pri = normalize_category_value(mapping["primary_category"])
                     sec = normalize_category_value(mapping["secondary_category"])
-                    if pri and pri not in inp_pri.options:
+                    if (
+                        pri
+                        and isinstance(inp_pri.options, list)
+                        and pri not in inp_pri.options
+                    ):
                         inp_pri.options.append(pri)
-                    if sec and sec not in inp_sec.options:
+                    if (
+                        sec
+                        and isinstance(inp_sec.options, list)
+                        and sec not in inp_sec.options
+                    ):
                         inp_sec.options.append(sec)
                     inp_pri.value = pri
                     inp_sec.value = sec
@@ -731,9 +739,17 @@ def build_expenses_tab(st, _refreshables):
                             sec = normalize_category_value(
                                 mapping["secondary_category"]
                             )
-                            if pri and pri not in new_pri.options:
+                            if (
+                                pri
+                                and isinstance(new_pri.options, list)
+                                and pri not in new_pri.options
+                            ):
                                 new_pri.options.append(pri)
-                            if sec and sec not in new_sec.options:
+                            if (
+                                sec
+                                and isinstance(new_sec.options, list)
+                                and sec not in new_sec.options
+                            ):
                                 new_sec.options.append(sec)
                             new_pri.value = pri
                             new_sec.value = sec

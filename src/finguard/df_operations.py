@@ -736,7 +736,10 @@ class InvestmentHoldings:
             pl.when(mask).then(pl.lit(link)).otherwise(pl.col("link")).alias("link")
         )
         self.df_prices = self.df_prices.with_columns(
-            pl.when(mask).then(pl.lit(link)).otherwise(pl.col("link")).alias("link")
+            pl.when(self.df_prices["asset_name"] == asset_name)
+            .then(pl.lit(link))
+            .otherwise(pl.col("link"))
+            .alias("link")
         )
         self.save()
 

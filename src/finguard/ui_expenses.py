@@ -14,6 +14,7 @@ from finguard.config import (
 )
 from finguard.config import (
     get_all_mappings,
+    get_known_categories,
     get_mapping,
 )
 from finguard.config import (
@@ -28,9 +29,9 @@ from finguard.df_operations import (
 from finguard.paths import (
     PRIMARIES_FILENAME,
     SECONDARIES_FILENAME,
+    get_dbs_root,
     get_year_summary_path,
 )
-from finguard.paths import get_dbs_root
 from finguard.ui_helpers import (
     _EXPENSE_COLUMNS,
     _MONTH_NAMES,
@@ -149,12 +150,28 @@ def build_expenses_tab(st, _refreshables):
                     ui.notify("Amount is required", type="warning")
                     return
                 try:
-                    existing_pri = set(
-                        v for v in st.de.expense_df["primary_category"].drop_nulls().to_list() if v
-                    ) if st.de is not None else set()
-                    existing_sec = set(
-                        v for v in st.de.expense_df["secondary_category"].drop_nulls().to_list() if v
-                    ) if st.de is not None else set()
+                    existing_pri = (
+                        set(
+                            v
+                            for v in st.de.expense_df["primary_category"]
+                            .drop_nulls()
+                            .to_list()
+                            if v
+                        )
+                        if st.de is not None
+                        else set()
+                    )
+                    existing_sec = (
+                        set(
+                            v
+                            for v in st.de.expense_df["secondary_category"]
+                            .drop_nulls()
+                            .to_list()
+                            if v
+                        )
+                        if st.de is not None
+                        else set()
+                    )
                     amount = _safe_eval_expr(str(inp_amount.value))
                     save_edit(
                         row_id,
@@ -164,7 +181,9 @@ def build_expenses_tab(st, _refreshables):
                             "expense_amount": amount,
                             "currency": inp_cur.value,
                             "expense_in_ref_currency": amount,
-                            "primary_category": resolve_category(inp_pri.value, existing_pri),
+                            "primary_category": resolve_category(
+                                inp_pri.value, existing_pri
+                            ),
                             "secondary_category": resolve_category(
                                 inp_sec.value, existing_sec
                             ),
@@ -187,10 +206,14 @@ def build_expenses_tab(st, _refreshables):
 
         if st.de is not None:
             pri_cats_set.update(
-                v for v in st.de.expense_df["primary_category"].drop_nulls().to_list() if v
+                v
+                for v in st.de.expense_df["primary_category"].drop_nulls().to_list()
+                if v
             )
             sec_cats_set.update(
-                v for v in st.de.expense_df["secondary_category"].drop_nulls().to_list() if v
+                v
+                for v in st.de.expense_df["secondary_category"].drop_nulls().to_list()
+                if v
             )
 
         # Also include categories from cumulative summary tables across all years
@@ -205,7 +228,9 @@ def build_expenses_tab(st, _refreshables):
                     cum = pl.read_parquet(str(pri_path))
                     if "primary_category" in cum.columns:
                         pri_cats_set.update(
-                            c for c in cum["primary_category"].to_list() if c and c != "Total"
+                            c
+                            for c in cum["primary_category"].to_list()
+                            if c and c != "Total"
                         )
 
                 sec_path = year_dir / SECONDARIES_FILENAME
@@ -213,11 +238,18 @@ def build_expenses_tab(st, _refreshables):
                     cum = pl.read_parquet(str(sec_path))
                     if "secondary_category" in cum.columns:
                         sec_cats_set.update(
-                            c for c in cum["secondary_category"].to_list() if c and c != "Total"
+                            c
+                            for c in cum["secondary_category"].to_list()
+                            if c and c != "Total"
                         )
         except Exception:
             # If anything goes wrong reading summaries, fall back to month-only lists
             pass
+
+        # Include manually registered categories
+        known = get_known_categories()
+        pri_cats_set.update(known.get("primary", []))
+        sec_cats_set.update(known.get("secondary", []))
 
         pri_cats = sorted({normalize_category_value(c) for c in pri_cats_set})
         sec_cats = sorted({normalize_category_value(c) for c in sec_cats_set})
@@ -247,13 +279,25 @@ def build_expenses_tab(st, _refreshables):
             _sec_pending: dict[str, str] = {"value": ""}
 
             def _on_pri_input(e) -> None:
-                raw = e.args if isinstance(e.args, str) else (e.args[0] if isinstance(e.args, list) and e.args else "")
-                if raw:  # Don't clear on blur – Quasar fires "" when focus leaves the input
+                raw = (
+                    e.args
+                    if isinstance(e.args, str)
+                    else (e.args[0] if isinstance(e.args, list) and e.args else "")
+                )
+                if (
+                    raw
+                ):  # Don't clear on blur – Quasar fires "" when focus leaves the input
                     _pri_pending["value"] = raw
 
             def _on_sec_input(e) -> None:
-                raw = e.args if isinstance(e.args, str) else (e.args[0] if isinstance(e.args, list) and e.args else "")
-                if raw:  # Don't clear on blur – Quasar fires "" when focus leaves the input
+                raw = (
+                    e.args
+                    if isinstance(e.args, str)
+                    else (e.args[0] if isinstance(e.args, list) and e.args else "")
+                )
+                if (
+                    raw
+                ):  # Don't clear on blur – Quasar fires "" when focus leaves the input
                     _sec_pending["value"] = raw
 
             inp_pri.on("input-value", _on_pri_input)
@@ -296,8 +340,12 @@ def build_expenses_tab(st, _refreshables):
                         expense_day=int(inp_day.value),
                         expense_amount=_safe_eval_expr(str(inp_amount.value)),
                         currency=inp_cur.value,
-                        primary_category=resolve_category(pri_val, set(pri_cats)) if pri_val else None,
-                        secondary_category=resolve_category(sec_val, set(sec_cats)) if sec_val else None,
+                        primary_category=resolve_category(pri_val, set(pri_cats))
+                        if pri_val
+                        else None,
+                        secondary_category=resolve_category(sec_val, set(sec_cats))
+                        if sec_val
+                        else None,
                     )
                     refresh_table()
                     dlg.close()
@@ -396,18 +444,14 @@ def build_expenses_tab(st, _refreshables):
             def summary_content():
                 if st.de is None:
                     return
-                kind = (
-                    "primary"
-                    if summary_kind.value == "Primary"
-                    else "secondary"
-                )
+                kind = "primary" if summary_kind.value == "Primary" else "secondary"
                 cat_col = f"{kind}_category"
 
                 # -- monthly summary for selected month --
                 monthly = st.de.create_expenses_summary_table(cat_col)
-                ui.label(
-                    f"Monthly \u2014 {_MONTH_NAMES[st.month]} {st.year}"
-                ).classes("text-lg font-bold mt-4")
+                ui.label(f"Monthly \u2014 {_MONTH_NAMES[st.month]} {st.year}").classes(
+                    "text-lg font-bold mt-4"
+                )
                 if monthly.height > 0:
                     cols = [
                         {
@@ -430,11 +474,7 @@ def build_expenses_tab(st, _refreshables):
                     ui.label("No data for this month.").classes("text-gray-500")
 
                 # -- cumulative year summary (if exists) --
-                fn = (
-                    PRIMARIES_FILENAME
-                    if kind == "primary"
-                    else SECONDARIES_FILENAME
-                )
+                fn = PRIMARIES_FILENAME if kind == "primary" else SECONDARIES_FILENAME
                 path = get_year_summary_path(st.year, fn)
                 if path.exists():
                     ui.label(f"Cumulative \u2014 {st.year}").classes(
@@ -444,16 +484,13 @@ def build_expenses_tab(st, _refreshables):
 
                     # Remove categories with zero expenses in all months
                     month_cols = [
-                        c for c in cum.columns
-                        if "-" in c and c.split("-")[1].isdigit()
+                        c for c in cum.columns if "-" in c and c.split("-")[1].isdigit()
                     ]
                     if month_cols:
                         all_zero = pl.all_horizontal(
                             pl.col(c).fill_null(0) == 0 for c in month_cols
                         )
-                        cum = cum.filter(
-                            ~all_zero | (pl.col(cat_col) == "Total")
-                        )
+                        cum = cum.filter(~all_zero | (pl.col(cat_col) == "Total"))
 
                     def _col_label(c: str) -> str:
                         if "_" in c:
@@ -496,16 +533,21 @@ def build_expenses_tab(st, _refreshables):
                     }
                     # Default: select the current month (if available)
                     default_sel = (
-                        [st.month] if st.month in available_months else
-                        list(available_months.keys())[:1]
+                        [st.month]
+                        if st.month in available_months
+                        else list(available_months.keys())[:1]
                     )
 
-                    chart_months_select = ui.select(
-                        options=available_months,
-                        value=default_sel,
-                        label="Months to compare (max 3)",
-                        multiple=True,
-                    ).classes("w-72 mb-2").props('use-chips')
+                    chart_months_select = (
+                        ui.select(
+                            options=available_months,
+                            value=default_sel,
+                            label="Months to compare (max 3)",
+                            multiple=True,
+                        )
+                        .classes("w-72 mb-2")
+                        .props("use-chips")
+                    )
 
                     chart_container = ui.column().classes("w-full")
 
@@ -524,21 +566,20 @@ def build_expenses_tab(st, _refreshables):
                     _render_chart()
 
                     # -- line chart: compare categories over months --
-                    ui.label("Compare Expenses").classes(
-                        "text-lg font-bold mt-8 mb-2"
-                    )
-                    all_categories = [
-                        c for c in cum[cat_col].to_list()
-                        if c != "Total"
-                    ]
+                    ui.label("Compare Expenses").classes("text-lg font-bold mt-8 mb-2")
+                    all_categories = [c for c in cum[cat_col].to_list() if c != "Total"]
                     default_cats = all_categories[:1]
 
-                    cat_line_select = ui.select(
-                        options=all_categories,
-                        value=default_cats,
-                        label="Categories to compare (max 3)",
-                        multiple=True,
-                    ).classes("w-80 mb-2").props("use-chips")
+                    cat_line_select = (
+                        ui.select(
+                            options=all_categories,
+                            value=default_cats,
+                            label="Categories to compare (max 3)",
+                            multiple=True,
+                        )
+                        .classes("w-80 mb-2")
+                        .props("use-chips")
+                    )
 
                     line_chart_container = ui.column().classes("w-full")
 
@@ -588,10 +629,18 @@ def build_expenses_tab(st, _refreshables):
                 sec_cats_set: set[str] = set()
                 if st.de is not None:
                     pri_cats_set.update(
-                        v for v in st.de.expense_df["primary_category"].drop_nulls().to_list() if v
+                        v
+                        for v in st.de.expense_df["primary_category"]
+                        .drop_nulls()
+                        .to_list()
+                        if v
                     )
                     sec_cats_set.update(
-                        v for v in st.de.expense_df["secondary_category"].drop_nulls().to_list() if v
+                        v
+                        for v in st.de.expense_df["secondary_category"]
+                        .drop_nulls()
+                        .to_list()
+                        if v
                     )
                 try:
                     dbs_root = get_dbs_root()
@@ -603,17 +652,26 @@ def build_expenses_tab(st, _refreshables):
                             cum = pl.read_parquet(str(pri_path))
                             if "primary_category" in cum.columns:
                                 pri_cats_set.update(
-                                    c for c in cum["primary_category"].to_list() if c and c != "Total"
+                                    c
+                                    for c in cum["primary_category"].to_list()
+                                    if c and c != "Total"
                                 )
                         sec_path = year_dir / SECONDARIES_FILENAME
                         if sec_path.exists():
                             cum = pl.read_parquet(str(sec_path))
                             if "secondary_category" in cum.columns:
                                 sec_cats_set.update(
-                                    c for c in cum["secondary_category"].to_list() if c and c != "Total"
+                                    c
+                                    for c in cum["secondary_category"].to_list()
+                                    if c and c != "Total"
                                 )
                 except Exception:
                     pass
+
+                # Include manually registered categories
+                known = get_known_categories()
+                pri_cats_set.update(known.get("primary", []))
+                sec_cats_set.update(known.get("secondary", []))
 
                 pri_cats = sorted({normalize_category_value(c) for c in pri_cats_set})
                 sec_cats = sorted({normalize_category_value(c) for c in sec_cats_set})
@@ -642,12 +700,24 @@ def build_expenses_tab(st, _refreshables):
                     _rec_sec_pending: dict[str, str] = {"value": ""}
 
                     def _on_rec_pri_input(e) -> None:
-                        raw = e.args if isinstance(e.args, str) else (e.args[0] if isinstance(e.args, list) and e.args else "")
+                        raw = (
+                            e.args
+                            if isinstance(e.args, str)
+                            else (
+                                e.args[0] if isinstance(e.args, list) and e.args else ""
+                            )
+                        )
                         if raw:  # Don't clear on blur – Quasar fires "" when focus leaves the input
                             _rec_pri_pending["value"] = raw
 
                     def _on_rec_sec_input(e) -> None:
-                        raw = e.args if isinstance(e.args, str) else (e.args[0] if isinstance(e.args, list) and e.args else "")
+                        raw = (
+                            e.args
+                            if isinstance(e.args, str)
+                            else (
+                                e.args[0] if isinstance(e.args, list) and e.args else ""
+                            )
+                        )
                         if raw:  # Don't clear on blur – Quasar fires "" when focus leaves the input
                             _rec_sec_pending["value"] = raw
 
@@ -658,7 +728,9 @@ def build_expenses_tab(st, _refreshables):
                         mapping = get_mapping(new_name.value)
                         if mapping:
                             pri = normalize_category_value(mapping["primary_category"])
-                            sec = normalize_category_value(mapping["secondary_category"])
+                            sec = normalize_category_value(
+                                mapping["secondary_category"]
+                            )
                             if pri and pri not in new_pri.options:
                                 new_pri.options.append(pri)
                             if sec and sec not in new_sec.options:
@@ -676,8 +748,12 @@ def build_expenses_tab(st, _refreshables):
                             return
                         try:
                             # Fall back to pending typed text if Enter was not pressed.
-                            rec_pri_val = new_pri.value or _rec_pri_pending["value"] or ""
-                            rec_sec_val = new_sec.value or _rec_sec_pending["value"] or ""
+                            rec_pri_val = (
+                                new_pri.value or _rec_pri_pending["value"] or ""
+                            )
+                            rec_sec_val = (
+                                new_sec.value or _rec_sec_pending["value"] or ""
+                            )
                             rec.add(
                                 expense_name=new_name.value,
                                 expense_day=int(new_day.value),
@@ -685,12 +761,18 @@ def build_expenses_tab(st, _refreshables):
                                 currency=new_cur.value,
                                 primary_category=resolve_category(
                                     rec_pri_val, set(pri_cats)
-                                ) if rec_pri_val else "",
+                                )
+                                if rec_pri_val
+                                else "",
                                 secondary_category=resolve_category(
                                     rec_sec_val, set(sec_cats)
-                                ) if rec_sec_val else "",
+                                )
+                                if rec_sec_val
+                                else "",
                             )
-                            ui.notify(f'Recurring "{new_name.value}" added', type="positive")
+                            ui.notify(
+                                f'Recurring "{new_name.value}" added', type="positive"
+                            )
                             recurring_content.refresh()
                         except Exception as exc:
                             ui.notify(str(exc), type="negative")
@@ -714,7 +796,10 @@ def build_expenses_tab(st, _refreshables):
                             type="positive",
                         )
                     else:
-                        ui.notify("All recurring expenses already present this month", type="info")
+                        ui.notify(
+                            "All recurring expenses already present this month",
+                            type="info",
+                        )
 
                 ui.button(
                     f"Apply to {_MONTH_NAMES[st.month]} {st.year}",
@@ -725,20 +810,62 @@ def build_expenses_tab(st, _refreshables):
                 # -- Table of existing recurring definitions --
                 if rec.df.height > 0:
                     rcols = [
-                        {"name": "expense_name", "label": "Name", "field": "expense_name", "align": "left", "sortable": True},
-                        {"name": "expense_day", "label": "Day", "field": "expense_day", "align": "center", "sortable": True},
-                        {"name": "expense_amount", "label": "Amount", "field": "expense_amount", "align": "right", "sortable": True},
-                        {"name": "currency", "label": "Cur", "field": "currency", "align": "center"},
-                        {"name": "primary_category", "label": "Primary", "field": "primary_category", "align": "left", "sortable": True},
-                        {"name": "secondary_category", "label": "Secondary", "field": "secondary_category", "align": "left", "sortable": True},
-                        {"name": "actions", "label": "", "field": "actions", "align": "center"},
+                        {
+                            "name": "expense_name",
+                            "label": "Name",
+                            "field": "expense_name",
+                            "align": "left",
+                            "sortable": True,
+                        },
+                        {
+                            "name": "expense_day",
+                            "label": "Day",
+                            "field": "expense_day",
+                            "align": "center",
+                            "sortable": True,
+                        },
+                        {
+                            "name": "expense_amount",
+                            "label": "Amount",
+                            "field": "expense_amount",
+                            "align": "right",
+                            "sortable": True,
+                        },
+                        {
+                            "name": "currency",
+                            "label": "Cur",
+                            "field": "currency",
+                            "align": "center",
+                        },
+                        {
+                            "name": "primary_category",
+                            "label": "Primary",
+                            "field": "primary_category",
+                            "align": "left",
+                            "sortable": True,
+                        },
+                        {
+                            "name": "secondary_category",
+                            "label": "Secondary",
+                            "field": "secondary_category",
+                            "align": "left",
+                            "sortable": True,
+                        },
+                        {
+                            "name": "actions",
+                            "label": "",
+                            "field": "actions",
+                            "align": "center",
+                        },
                     ]
                     rrows = [
                         {"id": i, **row}
                         for i, row in enumerate(rec.df.iter_rows(named=True))
                     ]
                     rt = ui.table(
-                        columns=rcols, rows=rrows, row_key="id",
+                        columns=rcols,
+                        rows=rrows,
+                        row_key="id",
                     ).classes("w-full text-lg")
                     rt.add_slot(
                         "body-cell-actions",
@@ -757,7 +884,9 @@ def build_expenses_tab(st, _refreshables):
 
                     rt.on("delete", do_delete_recurring)
                 else:
-                    ui.label("No recurring expenses defined yet.").classes("text-gray-500")
+                    ui.label("No recurring expenses defined yet.").classes(
+                        "text-gray-500"
+                    )
 
             recurring_content()
 
@@ -794,9 +923,7 @@ def build_expenses_tab(st, _refreshables):
                         except ValueError as exc:
                             ui.notify(str(exc), type="negative")
 
-                    ui.button(
-                        "Add Mapping", icon="add", on_click=do_add_mapping
-                    )
+                    ui.button("Add Mapping", icon="add", on_click=do_add_mapping)
 
                 if mappings:
                     mcols = [
@@ -832,9 +959,9 @@ def build_expenses_tab(st, _refreshables):
                         {"id": i, "expense_name": name, **m}
                         for i, (name, m) in enumerate(mappings.items())
                     ]
-                    mt = ui.table(
-                        columns=mcols, rows=mrows, row_key="id"
-                    ).classes("w-full text-lg")
+                    mt = ui.table(columns=mcols, rows=mrows, row_key="id").classes(
+                        "w-full text-lg"
+                    )
                     mt.add_slot(
                         "body-cell-actions",
                         """
@@ -852,9 +979,7 @@ def build_expenses_tab(st, _refreshables):
 
                     mt.on("delete", do_delete_mapping)
                 else:
-                    ui.label("No mappings configured yet.").classes(
-                        "text-gray-500"
-                    )
+                    ui.label("No mappings configured yet.").classes("text-gray-500")
 
             mappings_content()
 

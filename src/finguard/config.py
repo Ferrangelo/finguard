@@ -137,3 +137,96 @@ def get_all_mappings() -> dict[str, dict[str, str]]:
 def clear_all_mappings() -> None:
     """Delete **all** mappings (the file is kept but emptied)."""
     _save_mappings({})
+
+
+# ------------------------------------------------------------------
+# Known categories
+# ------------------------------------------------------------------
+
+CATEGORIES_FILE_NAME = "known_categories.json"
+
+
+def _load_known_categories() -> dict[str, list[str]]:
+    """Load known categories from disk.
+
+    Returns an empty structure if the file does not exist yet.
+    """
+    path = _get_config_dir() / CATEGORIES_FILE_NAME
+    if not path.exists():
+        return {"primary": [], "secondary": []}
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return {
+        "primary": data.get("primary", []),
+        "secondary": data.get("secondary", []),
+    }
+
+
+def _save_known_categories(data: dict[str, list[str]]) -> None:
+    """Persist known categories to disk (pretty-printed)."""
+    path = _get_config_dir() / CATEGORIES_FILE_NAME
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+
+def get_known_categories() -> dict[str, list[str]]:
+    """Return all manually registered categories.
+
+    Returns
+    -------
+    dict
+        ``{"primary": [...], "secondary": [...]}`` — each value is a
+        sorted list of category name strings.
+    """
+    return _load_known_categories()
+
+
+def add_known_category(name: str, kind: str) -> None:
+    """Register a new known category.
+
+    Parameters
+    ----------
+    name:
+        The category name to register.
+    kind:
+        Either ``"primary"`` or ``"secondary"``.
+
+    Raises
+    ------
+    ValueError
+        If *kind* is invalid, or the category already exists.
+    """
+    if kind not in ("primary", "secondary"):
+        raise ValueError(f"kind must be 'primary' or 'secondary', got '{kind}'")
+    data = _load_known_categories()
+    if name in data[kind]:
+        raise ValueError(f"Category '{name}' already exists in {kind} categories.")
+    data[kind].append(name)
+    data[kind].sort()
+    _save_known_categories(data)
+
+
+def remove_known_category(name: str, kind: str) -> None:
+    """Remove a manually registered category.
+
+    Parameters
+    ----------
+    name:
+        The category name to remove.
+    kind:
+        Either ``"primary"`` or ``"secondary"``.
+
+    Raises
+    ------
+    ValueError
+        If *kind* is invalid.
+    KeyError
+        If the category is not found in the config.
+    """
+    if kind not in ("primary", "secondary"):
+        raise ValueError(f"kind must be 'primary' or 'secondary', got '{kind}'")
+    data = _load_known_categories()
+    if name not in data[kind]:
+        raise KeyError(f"Category '{name}' not found in {kind} categories.")
+    data[kind].remove(name)
+    _save_known_categories(data)

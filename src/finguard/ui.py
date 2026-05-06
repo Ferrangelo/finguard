@@ -8,10 +8,10 @@ from nicegui import ui
 
 from finguard.df_operations import DetailedExpenses
 from finguard.ui_cashflow import build_cashflow_tab
+from finguard.ui_categories import build_categories_tab
 from finguard.ui_expenses import build_expenses_tab
 from finguard.ui_helpers import _MONTH_NAMES, _discover_years
 from finguard.ui_networth import build_networth_tab
-
 
 # ---------------------------------------------------------------------------
 # Page
@@ -94,6 +94,7 @@ def index():
         ui.tab("Expenses").props("no-caps").classes("text-2xl")
         ui.tab("Cashflow").props("no-caps").classes("text-2xl")
         ui.tab("NetWorth").props("no-caps").classes("text-2xl")
+        ui.tab("Categories").props("no-caps").classes("text-2xl")
 
     with ui.tab_panels(tabs, value="Expenses").classes("w-full"):
         # ===================== EXPENSES TAB =================================
@@ -107,6 +108,10 @@ def index():
         # ===================== NETWORTH TAB =================================
         with ui.tab_panel("NetWorth"):
             build_networth_tab(st, _refreshables)
+
+        # ===================== CATEGORIES TAB ================================
+        with ui.tab_panel("Categories"):
+            build_categories_tab()
 
     # -- refresh when switching tabs ----------------------------------------
     def _on_tab_change(e):
@@ -131,11 +136,21 @@ def main():
     """Entry point for the ``finguard-ui`` command.
     Optionally specify a port for the UI server (default: 8765).
     """
-    import sys
     import argparse
     import os
+    import sys
+
     parser = argparse.ArgumentParser(description="Run Finguard UI server.")
-    parser.add_argument("--port", type=int, default=8765, help="Port to run the UI server on (default: 8765)")
-    parser.add_argument("--host", default=os.environ.get("FINGUARD_HOST", "127.0.0.1"), help="Host to bind to (default: 127.0.0.1, set FINGUARD_HOST=0.0.0.0 for Docker)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="Port to run the UI server on (default: 8765)",
+    )
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("FINGUARD_HOST", "127.0.0.1"),
+        help="Host to bind to (default: 127.0.0.1, set FINGUARD_HOST=0.0.0.0 for Docker)",
+    )
     args = parser.parse_args(sys.argv[1:])
     ui.run(title="Finguard", host=args.host, port=args.port, reload=False)

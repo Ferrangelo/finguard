@@ -14,6 +14,7 @@ from finguard.paths import (
     PRIMARIES_FILENAME,
     RECURRING_EXPENSES_FILENAME,
     SECONDARIES_FILENAME,
+    get_dbs_root,
     get_monthly_parquet_path,
     get_year_summary_path,
     month_from_parquet_path,
@@ -40,6 +41,83 @@ _SPECIAL_CASES: dict[str, str] = {
     "charityhum": "CharityHum",
     "patreon-like": "Patreon-Like",
 }
+
+
+def get_category_totals_across_all_years(kind: str) -> dict[str, float]:
+    """Return the total ``expense_in_ref_currency`` for every category of
+    *kind* summed across **all** year summary parquet files.
+
+    Parameters
+    ----------
+    kind:
+        ``"primary"`` or ``"secondary"``.
+
+    Returns
+    -------
+    dict[str, float]
+        ``{category_name: total_amount}``.
+        Categories whose rows only contain zeros still appear with a value
+        of ``0.0``.  The synthetic ``"Total"`` row is excluded.
+    """
+    if kind not in ("primary", "secondary"):
+        raise ValueError(f"kind must be 'primary' or 'secondary', got '{kind}'")
+    filename = PRIMARIES_FILENAME if kind == "primary" else SECONDARIES_FILENAME
+    category_col = f"{kind}_category"
+    totals: dict[str, float] = {}
+    try:
+        for year_dir in get_dbs_root().iterdir():
+            if not year_dir.is_dir():
+                continue
+            path = year_dir / filename
+            if not path.exists():
+                continue
+            df = pl.read_parquet(str(path))
+            if category_col not in df.columns:
+                continue
+            month_cols = [c for c in df.columns if c != category_col]
+            for row in df.to_dicts():
+                cat = row[category_col]
+                if not cat or cat == "Total":
+                    continue
+                row_total = sum(row.get(c) or 0.0 for c in month_cols)
+                totals[cat] = totals.get(cat, 0.0) + row_total
+    except Exception:
+        pass
+    return totals
+
+
+def remove_category_from_all_summaries(name: str, kind: str) -> None:
+    """Delete the row for *name* from every year-summary parquet file.
+
+    This is a permanent write operation — call only after confirming the
+    category total is ``0.0``.
+
+    Parameters
+    ----------
+    name:
+        Exact category name to remove (case-sensitive).
+    kind:
+        ``"primary"`` or ``"secondary"``.
+    """
+    if kind not in ("primary", "secondary"):
+        raise ValueError(f"kind must be 'primary' or 'secondary', got '{kind}'")
+    filename = PRIMARIES_FILENAME if kind == "primary" else SECONDARIES_FILENAME
+    category_col = f"{kind}_category"
+    try:
+        for year_dir in get_dbs_root().iterdir():
+            if not year_dir.is_dir():
+                continue
+            path = year_dir / filename
+            if not path.exists():
+                continue
+            df = pl.read_parquet(str(path))
+            if category_col not in df.columns:
+                continue
+            filtered = df.filter(pl.col(category_col) != name)
+            if filtered.height != df.height:
+                filtered.write_parquet(str(path))
+    except Exception:
+        pass
 
 
 def normalize_category_value(value: str) -> str:
@@ -960,10 +1038,7 @@ class CreditsDebts:
             raise ValueError(f"Entry '{new_name}' already exists.")
         mask = self.df["name"] == old_name
         self.df = self.df.with_columns(
-            pl.when(mask)
-            .then(pl.lit(new_name))
-            .otherwise(pl.col("name"))
-            .alias("name")
+            pl.when(mask).then(pl.lit(new_name)).otherwise(pl.col("name")).alias("name")
         )
         self.save()
 
@@ -1021,22 +1096,28 @@ class RecurringExpenses:
         else:
             self.df = pl.DataFrame(schema=_RECURRING_SCHEMA)
 
-    def add(self, expense_name: str, expense_day: int, expense_amount: float,
-            currency: str, primary_category: str,
-            secondary_category: str = "") -> None:
+    def add(
+        self,
+        expense_name: str,
+        expense_day: int,
+        expense_amount: float,
+        currency: str,
+        primary_category: str,
+        secondary_category: str = "",
+    ) -> None:
         """Add a recurring expense definition."""
         if not 1 <= expense_day <= 28:
-            raise ValueError(
-                f"expense_day must be between 1 and 28, got {expense_day}"
-            )
-        new_row = pl.DataFrame({
-            "expense_name": [expense_name],
-            "expense_day": [expense_day],
-            "expense_amount": [expense_amount],
-            "currency": [currency],
-            "primary_category": [normalize_category_value(primary_category)],
-            "secondary_category": [normalize_category_value(secondary_category)],
-        })
+            raise ValueError(f"expense_day must be between 1 and 28, got {expense_day}")
+        new_row = pl.DataFrame(
+            {
+                "expense_name": [expense_name],
+                "expense_day": [expense_day],
+                "expense_amount": [expense_amount],
+                "currency": [currency],
+                "primary_category": [normalize_category_value(primary_category)],
+                "secondary_category": [normalize_category_value(secondary_category)],
+            }
+        )
         self.df = pl.concat([self.df, new_row], how="diagonal")
         self.save()
 
@@ -1047,7 +1128,8 @@ class RecurringExpenses:
         self.save()
 
     def apply_to_month(
-        self, de: "DetailedExpenses",
+        self,
+        de: "DetailedExpenses",
     ) -> list[str]:
         """Insert all recurring definitions into the given month.
 

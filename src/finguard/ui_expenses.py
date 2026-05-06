@@ -111,9 +111,14 @@ def build_expenses_tab(st, _refreshables):
                     val = full_date
                 elif isinstance(val, str):
                     val = date.fromisoformat(val) if isinstance(val, str) else val
+                # pl.lit(date) can be inferred as Int32 in some Polars versions,
+                # corrupting the column dtype.  Explicit cast keeps it as Date.
+                lit_expr = pl.lit(val).cast(pl.Date)
+            else:
+                lit_expr = pl.lit(val)
             df = df.with_columns(
                 pl.when(pl.col("_idx") == row_id)
-                .then(pl.lit(val))
+                .then(lit_expr)
                 .otherwise(pl.col(col))
                 .alias(col)
             )
@@ -236,6 +241,24 @@ def build_expenses_tab(st, _refreshables):
                 new_value_mode="add",
             ).classes("w-64")
 
+            # Track raw typed text so that clicking "Add" without pressing Enter
+            # still captures the typed value (Quasar's @new-value only fires on Enter).
+            _pri_pending: dict[str, str] = {"value": ""}
+            _sec_pending: dict[str, str] = {"value": ""}
+
+            def _on_pri_input(e) -> None:
+                raw = e.args if isinstance(e.args, str) else (e.args[0] if isinstance(e.args, list) and e.args else "")
+                if raw:  # Don't clear on blur – Quasar fires "" when focus leaves the input
+                    _pri_pending["value"] = raw
+
+            def _on_sec_input(e) -> None:
+                raw = e.args if isinstance(e.args, str) else (e.args[0] if isinstance(e.args, list) and e.args else "")
+                if raw:  # Don't clear on blur – Quasar fires "" when focus leaves the input
+                    _sec_pending["value"] = raw
+
+            inp_pri.on("input-value", _on_pri_input)
+            inp_sec.on("input-value", _on_sec_input)
+
             def on_name_blur():
                 mapping = get_mapping(inp_name.value)
                 if mapping:
@@ -264,13 +287,17 @@ def build_expenses_tab(st, _refreshables):
                     ui.notify("Day and amount are required", type="warning")
                     return
                 try:
+                    # Fall back to pending typed text if the select value was never
+                    # confirmed with Enter (common when clicking "Add" directly).
+                    pri_val = inp_pri.value or _pri_pending["value"] or None
+                    sec_val = inp_sec.value or _sec_pending["value"] or None
                     st.de.add_row(
                         expense_name=inp_name.value,
                         expense_day=int(inp_day.value),
                         expense_amount=_safe_eval_expr(str(inp_amount.value)),
                         currency=inp_cur.value,
-                        primary_category=resolve_category(inp_pri.value, set(pri_cats)) if inp_pri.value else None,
-                        secondary_category=resolve_category(inp_sec.value, set(sec_cats)) if inp_sec.value else None,
+                        primary_category=resolve_category(pri_val, set(pri_cats)) if pri_val else None,
+                        secondary_category=resolve_category(sec_val, set(sec_cats)) if sec_val else None,
                     )
                     refresh_table()
                     dlg.close()
@@ -344,7 +371,7 @@ def build_expenses_tab(st, _refreshables):
                 columns=_EXPENSE_COLUMNS,
                 rows=[],
                 row_key="id",
-                pagination={"rowsPerPage": 25},
+                pagination={"rowsPerPage": 50},
             ).classes("w-full text-lg")
 
             expenses_table.add_slot(
@@ -609,6 +636,24 @@ def build_expenses_tab(st, _refreshables):
                         new_value_mode="add",
                     ).classes("w-48")
 
+                    # Track raw typed text so clicking "Add Recurring" without
+                    # pressing Enter still captures the typed category value.
+                    _rec_pri_pending: dict[str, str] = {"value": ""}
+                    _rec_sec_pending: dict[str, str] = {"value": ""}
+
+                    def _on_rec_pri_input(e) -> None:
+                        raw = e.args if isinstance(e.args, str) else (e.args[0] if isinstance(e.args, list) and e.args else "")
+                        if raw:  # Don't clear on blur – Quasar fires "" when focus leaves the input
+                            _rec_pri_pending["value"] = raw
+
+                    def _on_rec_sec_input(e) -> None:
+                        raw = e.args if isinstance(e.args, str) else (e.args[0] if isinstance(e.args, list) and e.args else "")
+                        if raw:  # Don't clear on blur – Quasar fires "" when focus leaves the input
+                            _rec_sec_pending["value"] = raw
+
+                    new_pri.on("input-value", _on_rec_pri_input)
+                    new_sec.on("input-value", _on_rec_sec_input)
+
                     def on_rec_name_blur():
                         mapping = get_mapping(new_name.value)
                         if mapping:
@@ -630,17 +675,20 @@ def build_expenses_tab(st, _refreshables):
                             ui.notify("Name and amount are required", type="warning")
                             return
                         try:
+                            # Fall back to pending typed text if Enter was not pressed.
+                            rec_pri_val = new_pri.value or _rec_pri_pending["value"] or ""
+                            rec_sec_val = new_sec.value or _rec_sec_pending["value"] or ""
                             rec.add(
                                 expense_name=new_name.value,
                                 expense_day=int(new_day.value),
                                 expense_amount=_safe_eval_expr(str(new_amount.value)),
                                 currency=new_cur.value,
                                 primary_category=resolve_category(
-                                    new_pri.value, set(pri_cats)
-                                ) if new_pri.value else "",
+                                    rec_pri_val, set(pri_cats)
+                                ) if rec_pri_val else "",
                                 secondary_category=resolve_category(
-                                    new_sec.value, set(sec_cats)
-                                ) if new_sec.value else "",
+                                    rec_sec_val, set(sec_cats)
+                                ) if rec_sec_val else "",
                             )
                             ui.notify(f'Recurring "{new_name.value}" added', type="positive")
                             recurring_content.refresh()

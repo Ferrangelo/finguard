@@ -7,7 +7,7 @@ It follows a scheme similar to the old [Mr Rip spreadsheets](https://retireinpro
 
 Everything uses [Polars](https://pola.rs/) for data processing and Parquet for storage, simply because I am familiar with both.
 
-I wrote the core logic from scratch, but the user interface was almost entirely vibe-coded with an AI assistant (which also authored most comments and docstrings). As a result, the UI is functional but not polished.
+I wrote the core logic of the backend from scratch using polars. The user interface was coded using AI agents (Claude Opus and Sonnet). As a result, the UI is functional but not polished.
 
 ## Features
 

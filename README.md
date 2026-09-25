@@ -1,4 +1,4 @@
-**This project has been rewritten and updated in [Ferrangelo/finguard-rs](https://github.com/Ferrangelo/finguard-rs). It is now archived**
+**This project has been rewritten and updated in [Ferrangelo/finguard-rs](https://github.com/Ferrangelo/finguard-rs). It is now archived.**
 
 
 # Finguard

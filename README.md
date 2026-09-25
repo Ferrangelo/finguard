@@ -1,3 +1,6 @@
+**This project has been rewritten and updated in [Ferrangelo/finguard-rs](https://github.com/Ferrangelo/finguard-rs). It is now archived**
+
+
 # Finguard
 
 Tool for my personal finance management with an interactive web dashboard.
